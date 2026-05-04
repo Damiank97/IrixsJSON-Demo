@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background-color: #F8F4ED;
+  color: #15140F;
+}
+
+::selection {
+  background-color: #3A1F47;
+  color: #F8F4ED;
+}
+
+/* Subtiele paper-textuur via SVG noise — geeft warmte zonder druk */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  z-index: 1;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* Smooth scroll voor pagina-anchors */
+html { scroll-behavior: smooth; }
+
+/* JSON viewer styling */
+.json-viewer {
+  font-feature-settings: "ss02" 1, "calt" 1;
+  tab-size: 2;
+}
