@@ -2,44 +2,25 @@
 
 import { useMemo, useState } from "react";
 import type { ConnectorDetail } from "@/lib/data";
+import { GeneratorPanel } from "./GeneratorPanel";
+
+type View =
+  | { kind: "generator" }
+  | { kind: "example"; index: number }
+  | { kind: "schema"; index: number };
 
 export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
   const { connector, schemas, examples } = detail;
 
-  const tabs = useMemo(() => {
-    const list: { key: string; label: string; type: "example" | "schema"; index: number }[] = [];
-    examples.forEach((e, i) => {
-      const method = e.method_hint ? ` (${e.method_hint})` : "";
-      list.push({
-        key: `ex-${i}`,
-        label: prettifyName(e.name) + method,
-        type: "example",
-        index: i,
-      });
-    });
-    schemas.forEach((s, i) => {
-      list.push({
-        key: `sch-${i}`,
-        label: `Schema · ${s.method}`,
-        type: "schema",
-        index: i,
-      });
-    });
-    return list;
-  }, [examples, schemas]);
-
-  const [activeTab, setActiveTab] = useState(tabs[0]?.key ?? "");
+  const [view, setView] = useState<View>(() =>
+    examples.length > 0 ? { kind: "example", index: 0 } : { kind: "generator" }
+  );
 
   const activeContent = useMemo(() => {
-    const tab = tabs.find((t) => t.key === activeTab);
-    if (!tab) return null;
-    return tab.type === "example"
-      ? examples[tab.index].payload
-      : schemas[tab.index].schema;
-  }, [activeTab, tabs, examples, schemas]);
-
-  const activeIsExample =
-    tabs.find((t) => t.key === activeTab)?.type === "example";
+    if (view.kind === "example") return examples[view.index]?.payload;
+    if (view.kind === "schema") return schemas[view.index]?.schema;
+    return null;
+  }, [view, examples, schemas]);
 
   return (
     <>
@@ -78,50 +59,109 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
 
       {/* Content */}
       <section className="max-w-6xl mx-auto px-8 py-12">
-        {tabs.length === 0 ? (
-          <p className="text-muted font-display italic text-xl py-16 text-center">
-            Geen schema's of voorbeelden voor deze connector.
-          </p>
-        ) : (
-          <div className="grid grid-cols-12 gap-8">
-            {/* Tab navigation */}
-            <nav className="col-span-12 md:col-span-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted mb-4">
-                {examples.length > 0 ? "Voorbeelden" : "Schema's"}
-              </p>
-              <ul className="space-y-1">
-                {tabs.map((t) => (
-                  <li key={t.key}>
-                    <button
-                      onClick={() => setActiveTab(t.key)}
-                      className={`w-full text-left px-3 py-2 text-sm border-l-2 transition-all ${
-                        activeTab === t.key
-                          ? "border-accent text-ink bg-accent/[0.04]"
-                          : "border-rule text-muted hover:text-ink hover:border-accent/40"
-                      }`}
-                    >
-                      <span className={t.type === "schema" ? "font-mono text-xs" : ""}>
-                        {t.label}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+        <div className="grid grid-cols-12 gap-8">
+          {/* Sidebar nav */}
+          <nav className="col-span-12 md:col-span-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted mb-3">
+              Genereren
+            </p>
+            <ul className="space-y-1 mb-8">
+              <li>
+                <NavItem
+                  active={view.kind === "generator"}
+                  onClick={() => setView({ kind: "generator" })}
+                  highlight
+                >
+                  Random testdata
+                </NavItem>
+              </li>
+            </ul>
 
-            {/* Content viewer */}
-            <div className="col-span-12 md:col-span-9">
-              {activeContent ? (
-                <JsonViewer
-                  data={activeContent}
-                  label={activeIsExample ? "Voorbeeld-payload" : "JSON Schema"}
-                />
-              ) : null}
-            </div>
+            {examples.length > 0 && (
+              <>
+                <p className="text-xs uppercase tracking-[0.2em] text-muted mb-3">
+                  Voorbeelden
+                </p>
+                <ul className="space-y-1 mb-8">
+                  {examples.map((ex, i) => {
+                    const method = ex.method_hint ? ` (${ex.method_hint})` : "";
+                    return (
+                      <li key={i}>
+                        <NavItem
+                          active={view.kind === "example" && view.index === i}
+                          onClick={() => setView({ kind: "example", index: i })}
+                        >
+                          {prettifyName(ex.name) + method}
+                        </NavItem>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+
+            {schemas.length > 0 && (
+              <>
+                <p className="text-xs uppercase tracking-[0.2em] text-muted mb-3">
+                  Schema's
+                </p>
+                <ul className="space-y-1">
+                  {schemas.map((s, i) => (
+                    <li key={i}>
+                      <NavItem
+                        active={view.kind === "schema" && view.index === i}
+                        onClick={() => setView({ kind: "schema", index: i })}
+                      >
+                        <span className="font-mono text-xs">Schema · {s.method}</span>
+                      </NavItem>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </nav>
+
+          <div className="col-span-12 md:col-span-9">
+            {view.kind === "generator" ? (
+              <GeneratorPanel schemas={schemas} />
+            ) : activeContent !== undefined && activeContent !== null ? (
+              <JsonViewer
+                data={activeContent}
+                label={view.kind === "example" ? "Voorbeeld-payload" : "JSON Schema"}
+              />
+            ) : (
+              <p className="text-muted font-display italic text-xl py-16 text-center">
+                Niets te tonen.
+              </p>
+            )}
           </div>
-        )}
+        </div>
       </section>
     </>
+  );
+}
+
+function NavItem({
+  active,
+  onClick,
+  children,
+  highlight = false,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  highlight?: boolean;
+}) {
+  const base = "w-full text-left px-3 py-2 text-sm border-l-2 transition-all";
+  const styles = active
+    ? "border-accent text-ink bg-accent/[0.04]"
+    : highlight
+    ? "border-accent/50 text-ink hover:border-accent hover:bg-accent/[0.04]"
+    : "border-rule text-muted hover:text-ink hover:border-accent/40";
+  return (
+    <button onClick={onClick} className={`${base} ${styles}`}>
+      {children}
+    </button>
   );
 }
 
