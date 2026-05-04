@@ -95,6 +95,62 @@ export function dummyForField(
 
   // Specifieke AFAS-veldnamen — exact match
   switch (fieldName) {
+    // === Financieel — kop ===
+    case "Year":
+      return new Date().getFullYear();
+    case "Peri":
+      return new Date().getMonth() + 1;
+    case "UnId":
+      return 1;
+    case "JoCo":
+      return "";  // dagboekcode is project-specifiek; gebruiker moet invullen
+    case "AuNu":
+      return true;
+    case "PrTp":
+      return 0;
+    case "AdDc": case "AdDa":
+      return false;
+
+    // === Financieel — regels ===
+    case "VaAs":
+      // 1 = grootboek, 2 = debiteur, 3 = crediteur. Default grootboek voor index>1, debiteur voor eerste regel
+      return index === 1 ? "2" : "1";
+    case "AcNr":
+      return "80000000";  // realistische grootboekrek
+    case "AmDe":
+      return Number((index * 100 + 50).toFixed(2));
+    case "AmCr":
+      return 0;
+    case "EnDa": case "BpDa":
+      return isoDate(0);
+    case "DaEx":
+      return isoDate(30);
+    case "BpNr": case "InId":
+      return `2026${String(1000 + index).padStart(6, "0")}`;
+    case "Ds":
+      return `Testboeking ${index}`;
+    case "PaId":
+      return `REF${index}`;
+    case "VaId":
+      return "1";  // BTW-code 1 = 21%
+    case "BlPa":
+      return false;
+    case "DiC1": case "DiC2": case "DiC3":
+      return "0001";  // kostenplaats placeholder
+
+    // === Project ===
+    case "PrId":
+      return "PRJ" + String(1000 + index);
+    case "ItCd":
+      return "ART" + String(100 + index);
+    case "AmCo": case "AmSe":
+      return Number((index * 100).toFixed(2));
+    case "Ch":
+      return 1;
+    case "Qu":
+      return 1;
+
+    // === Stamdata personen ===
     case "BcCo": case "BSN":
       return generateBSN(index);
     case "EmAd":
@@ -117,14 +173,10 @@ export function dummyForField(
       return `${pick(FIRST_NAMES, index)} ${pick(LAST_NAMES, index)}`;
     case "BcId":
       return "TEST" + String(1000 + index);
-    case "ItCd":
-      return "ART" + String(100 + index);
     case "DbId":
       return "DEB" + String(1000 + index);
     case "CrId":
       return "CRE" + String(1000 + index);
-    case "PrId":
-      return "PRJ" + String(1000 + index);
     case "EmId":
       return "EMP" + String(100 + index);
     case "VaGe": case "Geslacht":

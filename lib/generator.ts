@@ -72,9 +72,12 @@ function generateValue(
       const includeField =
         mode === "full" ||
         isRequired ||
-        // Container-properties (Element, Fields, Objects, en eigennaam-wrappers)
-        // zijn structureel — die moeten altijd mee, ook in minimal mode.
-        isStructural(key, child);
+        // Element/Fields zijn structureel — die wrappen de data en zijn altijd nodig
+        isStructural(key, child) ||
+        // Objects: nested entiteiten zoals FiEntries onder FiEntryPar.
+        // Zonder deze is een payload meestal incompleet (een header zonder regels
+        // is geen geldige boeking). Dus ook in minimal mode meenemen.
+        key === "Objects";
 
       if (!includeField) continue;
 

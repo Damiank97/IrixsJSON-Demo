@@ -22,6 +22,9 @@ export function GeneratorPanel({ schemas }: Props) {
   const [csvFileName, setCsvFileName] = useState<string>("");
   const [output, setOutput] = useState<unknown>(null);
   const [copied, setCopied] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiUsed, setAiUsed] = useState(false);
 
   const activeSchema = availableSchemas[schemaIndex];
 
@@ -88,6 +91,37 @@ export function GeneratorPanel({ schemas }: Props) {
       seedRows: csvData ?? undefined,
     });
     setOutput(result);
+    setAiUsed(false);
+    setAiError(null);
+  }
+
+  async function handleImproveWithAi() {
+    if (output === null) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connectorId: activeSchema.connector_id,
+          method: activeSchema.method,
+          schema: activeSchema.schema,
+          currentPayload: output,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiError(data.error ?? `Fout (${res.status})`);
+        return;
+      }
+      setOutput(data.improved);
+      setAiUsed(true);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Onbekende fout");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   async function handleCopy() {
@@ -276,11 +310,23 @@ export function GeneratorPanel({ schemas }: Props) {
       {/* Output */}
       {output !== null && (
         <div className="border border-rule bg-paper">
-          <div className="flex justify-between items-center px-4 py-3 border-b border-rule">
-            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-rule flex-wrap gap-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted flex items-center gap-3">
               Gegenereerd
+              {aiUsed && (
+                <span className="text-[10px] tracking-widest text-accent border border-accent/40 px-1.5 py-0.5">
+                  ✦ AI verrijkt
+                </span>
+              )}
             </span>
             <div className="flex gap-2">
+              <button
+                onClick={handleImproveWithAi}
+                disabled={aiLoading}
+                className="text-xs font-mono px-3 py-1.5 border border-accent/50 text-accent hover:bg-accent hover:text-canvas hover:border-accent transition-colors disabled:opacity-50 disabled:cursor-wait"
+              >
+                {aiLoading ? "Bezig…" : "✦ Verbeter met AI"}
+              </button>
               <button
                 onClick={handleCopy}
                 className="text-xs font-mono px-3 py-1.5 border border-rule text-ink hover:bg-accent hover:text-canvas hover:border-accent transition-colors"
@@ -295,6 +341,11 @@ export function GeneratorPanel({ schemas }: Props) {
               </button>
             </div>
           </div>
+          {aiError && (
+            <div className="px-4 py-2 border-b border-rule bg-method-delete/5 text-xs text-method-delete">
+              {aiError}
+            </div>
+          )}
           <pre className="json-viewer text-xs leading-relaxed p-6 overflow-auto max-h-[60vh] font-mono text-ink">
             {JSON.stringify(output, null, 2)}
           </pre>
