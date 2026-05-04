@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ConnectorDetail } from "@/lib/data";
+import { buildLlmPrompt } from "@/lib/llmExport";
 import { GeneratorPanel } from "./GeneratorPanel";
 
 type View =
@@ -11,6 +12,7 @@ type View =
 
 export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
   const { connector, schemas, examples } = detail;
+  const [llmCopied, setLlmCopied] = useState(false);
 
   const [view, setView] = useState<View>(() =>
     examples.length > 0 ? { kind: "example", index: 0 } : { kind: "generator" }
@@ -21,6 +23,17 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
     if (view.kind === "schema") return schemas[view.index]?.schema;
     return null;
   }, [view, examples, schemas]);
+
+  async function copyForLlm() {
+    const prompt = buildLlmPrompt(detail);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setLlmCopied(true);
+      setTimeout(() => setLlmCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }
 
   return (
     <>
@@ -34,11 +47,20 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
             <h1 className="font-mono text-5xl text-ink mb-6 tracking-tight">
               {connector.id}
             </h1>
-            <p className="font-display text-2xl italic text-ink/80 leading-snug max-w-2xl">
+            <p className="font-display text-2xl italic text-ink/80 leading-snug max-w-2xl mb-8">
               {connector.description || (
                 <span className="text-muted">Geen omschrijving beschikbaar.</span>
               )}
             </p>
+
+            {/* LLM-export knop */}
+            <button
+              onClick={copyForLlm}
+              className="text-xs font-mono px-4 py-2.5 border border-accent text-accent hover:bg-accent hover:text-canvas transition-colors inline-flex items-center gap-2"
+              title="Kopieert schema, omschrijving en een voorbeeld als markdown — plak in ChatGPT of Claude voor hulp"
+            >
+              {llmCopied ? "✓ Gekopieerd — plak in je LLM" : "📋 Kopieer als prompt voor ChatGPT / Claude"}
+            </button>
           </div>
 
           <div className="md:col-span-4 space-y-6 border-l border-rule pl-6">
@@ -53,6 +75,27 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
             </Field>
             <Field label="Schema's">{schemas.length}</Field>
             <Field label="Voorbeelden">{examples.length}</Field>
+          </div>
+        </div>
+      </section>
+
+      {/* Uitleg-strip — alleen als hier nog geen voorbeelden zijn, of als context */}
+      <section className="bg-paper border-b border-rule">
+        <div className="max-w-6xl mx-auto px-8 py-6 text-xs text-muted leading-relaxed grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <span className="text-accent font-mono mr-2">→</span>
+            <strong className="text-ink font-normal">Genereren</strong> — random testdata met
+            eigen waarden of CSV upload, optioneel verrijkt met AI
+          </div>
+          <div>
+            <span className="text-accent font-mono mr-2">→</span>
+            <strong className="text-ink font-normal">Voorbeelden</strong> — alle officiële
+            voorbeeld-payloads van AFAS, kant-en-klaar
+          </div>
+          <div>
+            <span className="text-accent font-mono mr-2">→</span>
+            <strong className="text-ink font-normal">Schema</strong> — het volledige JSON-schema
+            inclusief alle veld-types en verplichte velden
           </div>
         </div>
       </section>

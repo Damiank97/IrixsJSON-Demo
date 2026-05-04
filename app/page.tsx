@@ -54,6 +54,32 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Wat is dit — uitleg voor consultants */}
+      <section className="border-b border-rule">
+        <div className="max-w-6xl mx-auto px-8 py-16">
+          <p className="text-xs uppercase tracking-[0.25em] text-muted mb-10">
+            Voor consultants & developers
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <UseCase
+              number="01"
+              title="Geen klikwerk in AFAS Help"
+              body="Alle connectors uitklapbaar op één pagina, doorzoekbaar op naam, omschrijving of groep. Schema's en voorbeelden direct zichtbaar zonder per veld te hoeven dubbelklikken op help.afas.nl."
+            />
+            <UseCase
+              number="02"
+              title="Plakbaar in je eigen LLM"
+              body="Bij elke connector een 'Voor LLM' knop die schema, omschrijving en voorbeeld bundelt als markdown. Plak in ChatGPT of Claude en stel je vraag — geen schema's meer overtypen."
+            />
+            <UseCase
+              number="03"
+              title="Testdata in seconden"
+              body="Random payloads voor TO's, integratietests of demo-omgevingen. Eigen waarden meegeven, CSV met testdata uploaden, of de output door een LLM laten verrijken voor realistische data."
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Browser */}
       <section className="max-w-6xl mx-auto px-8 py-16">
         <ConnectorBrowser connectors={connectors} />
@@ -77,6 +103,24 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div>
       <dt className="text-xs uppercase tracking-[0.2em] text-muted">{label}</dt>
       <dd className="font-display text-4xl text-ink mt-1 tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+function UseCase({
+  number,
+  title,
+  body,
+}: {
+  number: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div>
+      <p className="font-mono text-xs text-accent mb-3 tabular-nums">{number}</p>
+      <h3 className="font-display text-2xl text-ink leading-tight mb-3">{title}</h3>
+      <p className="text-sm text-muted leading-relaxed">{body}</p>
     </div>
   );
 }
