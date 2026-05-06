@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { generatePayload, parseCsv } from "@/lib/generator";
+import { useEffect, useMemo, useState } from "react";
+import { generatePayload, parseCsv, findOptionalEntities } from "@/lib/generator";
 import type { ConnectorSchema } from "@/lib/data";
 
 type Props = {
@@ -20,6 +20,7 @@ export function GeneratorPanel({ schemas }: Props) {
   const [csvData, setCsvData] = useState<Record<string, string>[] | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
   const [csvFileName, setCsvFileName] = useState<string>("");
+  const [optionalEntities, setOptionalEntities] = useState<Set<string>>(new Set());
   const [output, setOutput] = useState<unknown>(null);
   const [copied, setCopied] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -29,7 +30,30 @@ export function GeneratorPanel({ schemas }: Props) {
   const activeSchema = availableSchemas[schemaIndex];
 
   // Velden uit het actieve schema halen — voor de hint-lijst
-  const requiredFields = useMemo(() => extractRequiredFields(activeSchema?.schema), [activeSchema]);
+  const requiredFields = useMemo(
+    () => extractRequiredFields(activeSchema?.schema),
+    [activeSchema]
+  );
+
+  // Optionele toggleable entities (FiPrjEntries, FiTransEntries, etc.)
+  const availableOptionals = useMemo(
+    () => (activeSchema ? findOptionalEntities(activeSchema.schema) : []),
+    [activeSchema]
+  );
+
+  // Reset selecties als de gebruiker van schema switcht (POST → PUT)
+  useEffect(() => {
+    setOptionalEntities(new Set());
+  }, [schemaIndex]);
+
+  function toggleOptional(name: string) {
+    setOptionalEntities((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
 
   if (!activeSchema) {
     return (
@@ -89,6 +113,7 @@ export function GeneratorPanel({ schemas }: Props) {
       count,
       overrides,
       seedRows: csvData ?? undefined,
+      includeOptional: optionalEntities,
     });
     setOutput(result);
     setAiUsed(false);
@@ -224,6 +249,48 @@ export function GeneratorPanel({ schemas }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Optionele entities */}
+      {availableOptionals.length > 0 && (
+        <div>
+          <label className="text-xs uppercase tracking-[0.2em] text-muted mb-2 block">
+            Optionele onderdelen{" "}
+            <span className="text-muted/60 normal-case tracking-normal">
+              ({optionalEntities.size}/{availableOptionals.length} geselecteerd)
+            </span>
+          </label>
+          <p className="text-xs text-muted mb-3 leading-relaxed">
+            Niet-verplichte nested entiteiten — vink aan welke onderdelen je in de payload wil opnemen.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {availableOptionals.map((opt) => {
+              const checked = optionalEntities.has(opt.name);
+              return (
+                <button
+                  key={opt.name}
+                  type="button"
+                  onClick={() => toggleOptional(opt.name)}
+                  title={opt.description || undefined}
+                  className={`text-xs font-mono px-3 py-2 border transition-colors flex items-center gap-2 ${
+                    checked
+                      ? "border-accent bg-accent text-canvas"
+                      : "border-rule text-muted hover:border-accent hover:text-accent"
+                  }`}
+                >
+                  <span
+                    className={`inline-block w-3 h-3 border ${
+                      checked ? "bg-canvas border-canvas" : "border-rule"
+                    } flex items-center justify-center`}
+                  >
+                    {checked && <span className="text-accent text-[9px] leading-none">✓</span>}
+                  </span>
+                  {opt.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Override velden */}
       <div>
