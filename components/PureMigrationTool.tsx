@@ -18,6 +18,7 @@ export function PureMigrationTool() {
   const [lookupError, setLookupError] = useState("");
   const [result, setResult] = useState<MigrationResult | null>(EMPTY_RESULT);
   const [busy, setBusy] = useState(false);
+  const [includeImportDefinition, setIncludeImportDefinition] = useState(false);
 
   const canConvert = Boolean(source && lookup && !busy);
   const status = useMemo(() => {
@@ -57,35 +58,64 @@ export function PureMigrationTool() {
     link.href = url;
     link.download = "PURE9_naar_PURE10_COMPLEET.csv";
     link.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    if (includeImportDefinition) {
+      window.setTimeout(() => {
+        const definitionLink = document.createElement("a");
+        definitionLink.href = "/downloads/Import%20PURE10.ipd";
+        definitionLink.download = "Import PURE10.ipd";
+        definitionLink.click();
+      }, 250);
+    }
   }
 
   return (
     <div className="space-y-12">
-      <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-        <div>
-          <p className="mb-5 text-xs uppercase tracking-[0.25em] text-muted">PURE migratie · versie 9 naar 10</p>
-          <h1 className="font-display text-5xl leading-[0.98] tracking-tightest text-ink md:text-7xl">
-            Van twee exports naar één
-            <br /><em className="text-accent">importklaar bestand.</em>
-          </h1>
-          <p className="mt-7 max-w-2xl text-base leading-relaxed text-muted">
-            Koppel de PURE 9-planning aan de actuele voorcalculatieregels. De Toolbox controleert alle GUID's,
-            bewaakt de vaste kolomvolgorde en maakt de bewezen PURE 10-import als puntkomma-CSV.
-          </p>
-        </div>
-        <div className="self-end border-l border-rule pl-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted">Privacy</p>
-          <p className="mt-2 font-display text-3xl text-ink">100% in je browser</p>
-          <p className="mt-2 text-sm leading-relaxed text-muted">
-            Geen AI, geen API en geen upload naar een server. De klantdata blijft op je eigen computer.
-          </p>
+      <section>
+        <p className="mb-5 text-xs uppercase tracking-[0.25em] text-muted">PURE migratie · versie 9 naar 10</p>
+        <h1 className="font-display text-5xl leading-[0.98] tracking-tightest text-ink md:text-7xl">
+          PURE 9-planning omzetten
+          <br /><em className="text-accent">naar PURE 10.</em>
+        </h1>
+        <p className="mt-7 max-w-2xl text-base leading-relaxed text-muted">
+          Volg de drie stappen hieronder. De Toolbox koppelt iedere planningsregel aan de juiste werksoort-GUID
+          en maakt daarna het importbestand voor PURE 10.
+        </p>
+      </section>
+
+      <section className="border-y border-rule py-8">
+        <div className="grid gap-8 md:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <p className="font-mono text-xs text-accent">01</p>
+            <h2 className="mt-3 font-display text-4xl text-ink">Definities importeren en exporteren</h2>
+            <p className="mt-4 text-sm leading-relaxed text-muted">
+              Importeer de weergave in PURE 9 en exporteer daarmee de planning. Importeer daarnaast de GetConnector
+              en exporteer de voorcalculatieregels.
+            </p>
+          </div>
+          <div className="divide-y divide-rule border-y border-rule">
+            <DefinitionDownload
+              href="/downloads/PURE%209%20weergave%20voor%20export.viw"
+              title="PURE 9 weergave voor export.viw"
+              label="Weergave voor Vrije bestandswaarden 09"
+            />
+            <DefinitionDownload
+              href="/downloads/Voorcalculatieregels.gcn"
+              title="Voorcalculatieregels.gcn"
+              label="GetConnector voor de werksoort-GUID's"
+            />
+          </div>
         </div>
       </section>
 
+      <div>
+        <p className="font-mono text-xs text-accent">02</p>
+        <h2 className="mt-3 font-display text-4xl text-ink">Beide exports uploaden</h2>
+      </div>
       <section className="grid gap-5 md:grid-cols-2">
         <FileCard
-          number="01"
+          number="02A"
           title="PURE 9 planning"
           hint="Vrije bestandswaarden 09 · .xlsx, .xls of .csv"
           table={source}
@@ -93,7 +123,7 @@ export function PureMigrationTool() {
           onFile={(file) => selectFile(file, "source")}
         />
         <FileCard
-          number="02"
+          number="02B"
           title="Voorcalculatieregels"
           hint="GetConnector-export · .xlsx, .xls of .csv"
           table={lookup}
@@ -105,7 +135,7 @@ export function PureMigrationTool() {
       <section className="border-y border-rule py-8">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-muted">Status</p>
+            <p className="font-mono text-xs text-accent">03 · Converteren</p>
             <p className="mt-1 font-display text-3xl text-ink">{status}</p>
           </div>
           <button
@@ -119,21 +149,14 @@ export function PureMigrationTool() {
         </div>
       </section>
 
-      {result && <ResultPanel result={result} onDownload={download} />}
-
-      <section className="grid gap-8 border-t border-rule pt-10 md:grid-cols-[0.9fr_1.1fr]">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-muted">AFAS definities</p>
-          <h2 className="mt-3 font-display text-4xl text-ink">Eerst installeren, daarna converteren.</h2>
-          <p className="mt-4 text-sm leading-relaxed text-muted">
-            Importeer de GetConnector in de bronomgeving en de importdefinitie in PURE 10. Daarna kun je dezelfde route bij iedere klant herhalen.
-          </p>
-        </div>
-        <div className="divide-y divide-rule border-y border-rule">
-          <DefinitionDownload href="/downloads/Voorcalculatieregels.gcn" title="Voorcalculatieregels.gcn" label="GetConnector" />
-          <DefinitionDownload href="/downloads/Import%20PURE10.ipd" title="Import PURE10.ipd" label="Importdefinitie" />
-        </div>
-      </section>
+      {result && (
+        <ResultPanel
+          result={result}
+          onDownload={download}
+          includeImportDefinition={includeImportDefinition}
+          onIncludeImportDefinition={setIncludeImportDefinition}
+        />
+      )}
 
       <details className="border-t border-rule pt-8 text-sm text-muted">
         <summary className="cursor-pointer font-semibold text-ink">Vaste uitvoer en controles bekijken</summary>
@@ -187,7 +210,12 @@ function FileCard({ number, title, hint, table, error, onFile }: {
   );
 }
 
-function ResultPanel({ result, onDownload }: { result: MigrationResult; onDownload: () => void }) {
+function ResultPanel({ result, onDownload, includeImportDefinition, onIncludeImportDefinition }: {
+  result: MigrationResult;
+  onDownload: () => void;
+  includeImportDefinition: boolean;
+  onIncludeImportDefinition: (value: boolean) => void;
+}) {
   if (result.errors.length) {
     return (
       <section className="border border-method-delete/30 bg-red-50 p-6">
@@ -209,9 +237,23 @@ function ResultPanel({ result, onDownload }: { result: MigrationResult; onDownlo
             <h2 className="mt-2 font-display text-4xl text-ink">{stats.convertedRows.toLocaleString("nl-NL")} regels klaar</h2>
             <p className="mt-2 text-sm text-muted">{stats.totalHours.toLocaleString("nl-NL", { maximumFractionDigits: 6 })} uur · 22 vaste kolommen · UTF-8 BOM · CRLF</p>
           </div>
-          <button type="button" onClick={onDownload} className="bg-method-post px-7 py-4 text-sm font-semibold text-white transition hover:opacity-90">
-            Download PURE 10-CSV
-          </button>
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            <button type="button" onClick={onDownload} className="bg-method-post px-7 py-4 text-sm font-semibold text-white transition hover:opacity-90">
+              Download PURE 10-CSV
+            </button>
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={includeImportDefinition}
+                onChange={(event) => onIncludeImportDefinition(event.target.checked)}
+                className="h-4 w-4 accent-[#2D5A3A]"
+              />
+              Importdefinitie ook downloaden
+            </label>
+            <a href="/downloads/Import%20PURE10.ipd" download className="text-xs text-muted underline hover:text-accent">
+              Import PURE10.ipd los downloaden
+            </a>
+          </div>
         </div>
       </div>
 

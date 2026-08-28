@@ -10,14 +10,16 @@ Interne AFAS-toolbox met twee onderdelen:
 
 ## PURE-migratie
 
-De migratie draait volledig lokaal in de browser. Er worden geen klantgegevens
-naar een server of AI-model gestuurd.
+Werkwijze:
 
-Benodigd:
-
-1. Een export van vrije bestandswaarden 09 uit PURE 9 (`.xlsx`, `.xls`, `.csv`
-   of `.tsv`).
-2. Een export van de meegeleverde `Voorcalculatieregels.gcn` GetConnector.
+1. Download en importeer `PURE 9 weergave voor export.viw` in PURE 9 en
+   exporteer daarmee vrije bestandswaarden 09.
+2. Download en importeer `Voorcalculatieregels.gcn` en exporteer de
+   GetConnector.
+3. Upload beide exports (`.xlsx`, `.xls`, `.csv` of `.tsv`) en voer de
+   conversie uit.
+4. Download de PURE 10-CSV. `Import PURE10.ipd` kan daarbij optioneel meteen of
+   later los worden gedownload.
 
 De Toolbox controleert onder andere verplichte velden, GUID-matches, dubbele
 Event-guid's, werksoorttype `Wst`, datums, uren en perioden. Alleen na een
@@ -25,8 +27,8 @@ foutloze controle wordt de PURE 10-CSV beschikbaar. De uitvoer gebruikt de
 bewezen vaste 22-kolomsvolgorde, puntkomma's, Nederlandse decimale komma's,
 UTF-8 BOM en CRLF-regelafbrekingen.
 
-De bestanden `Voorcalculatieregels.gcn` en `Import PURE10.ipd` zijn rechtstreeks
-in de PURE-tool te downloaden.
+Alle drie de AFAS-definitiebestanden zijn rechtstreeks in de PURE-tool te
+downloaden.
 
 ## Lokaal draaien
 
