@@ -25,8 +25,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AFAS Schemabank — Irixs",
-  description: "Voorbeeld-JSON en schema's voor AFAS UpdateConnectors",
+  title: "Irixs Toolbox (By Damian)",
+  description: "AFAS hulpmiddelen voor PURE-migraties, voorbeeld-JSON en UpdateConnector-schema's.",
 };
 
 export default function RootLayout({

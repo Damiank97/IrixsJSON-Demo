@@ -1,8 +1,32 @@
-# AFAS Schemabank — demo
+# Irixs Toolbox (By Damian)
 
-Strakke, demo-klare frontend voor de schemabank. Toont alle 201 AFAS
-UpdateConnectors met hun schema's en voorbeeld-payloads, met zoek- en
-filtermogelijkheden.
+Interne AFAS-toolbox met twee onderdelen:
+
+- **PURE 9 → PURE 10** — zet een PURE 9-planning en de export van de
+  `Voorcalculatieregels` GetConnector om naar een direct importeerbare PURE
+  10-CSV.
+- **JSON Schemabank** — doorzoek 201 AFAS UpdateConnectors en bekijk schema's
+  en voorbeeld-payloads.
+
+## PURE-migratie
+
+De migratie draait volledig lokaal in de browser. Er worden geen klantgegevens
+naar een server of AI-model gestuurd.
+
+Benodigd:
+
+1. Een export van vrije bestandswaarden 09 uit PURE 9 (`.xlsx`, `.xls`, `.csv`
+   of `.tsv`).
+2. Een export van de meegeleverde `Voorcalculatieregels.gcn` GetConnector.
+
+De Toolbox controleert onder andere verplichte velden, GUID-matches, dubbele
+Event-guid's, werksoorttype `Wst`, datums, uren en perioden. Alleen na een
+foutloze controle wordt de PURE 10-CSV beschikbaar. De uitvoer gebruikt de
+bewezen vaste 22-kolomsvolgorde, puntkomma's, Nederlandse decimale komma's,
+UTF-8 BOM en CRLF-regelafbrekingen.
+
+De bestanden `Voorcalculatieregels.gcn` en `Import PURE10.ipd` zijn rechtstreeks
+in de PURE-tool te downloaden.
 
 ## Lokaal draaien
 
@@ -11,57 +35,14 @@ npm install
 npm run dev
 ```
 
-→ open http://localhost:3000
+Open daarna <http://localhost:3000>.
 
-## Deployen naar Vercel
-
-```bash
-npx vercel
-```
-
-Volg de prompts (eerste keer: inloggen, project linken). Na ~30s heb je
-een live URL die je kunt delen voor de demo. Geen environment variables
-nodig — alle data zit in `data/`.
-
-## Wat erin zit
-
-- **`data/index.json`** — lichte lijst van 201 connectors voor de homepage
-- **`data/connectors/*.json`** — per connector: schema's + voorbeelden
-- **`app/page.tsx`** — homepage met search en groep-filter
-- **`app/connector/[id]/page.tsx`** — detail-pagina, statisch gegenereerd
-- **`components/`** — `ConnectorBrowser` (zoek+filter) en `ConnectorDetailView` (tabs + JSON viewer)
-
-## Data updaten
-
-De data komt uit `parse_oascontent.py` (in de `afas-schemabank/` repo).
-Om te updaten: draai die parser tegen een verse `git pull` van OASContent
-en kopieer de output naar `data/`:
+## Productiebuild
 
 ```bash
-# Vanuit de afas-schemabank folder
-python parse_oascontent.py
-python split_for_demo.py    # nog te schrijven, of handmatig per connector
-cp -r demo-data/* /pad/naar/afas-demo/data/
+npm run build
+npm start
 ```
 
-## Techstack
-
-- Next.js 15 (App Router, RSC)
-- React 19 RC
-- Tailwind CSS 3
-- TypeScript
-
-## Design
-
-- **Display**: Instrument Serif (Google Fonts)
-- **Body**: Manrope (Google Fonts)
-- **Mono**: JetBrains Mono (Google Fonts)
-- **Palette**: cream canvas, ink-zwarte tekst, aubergine accent
-- Subtiele paper-textuur via SVG noise-overlay
-
-## Wat dit *niet* is
-
-Deze demo heeft géén database, géén nightly sync, géén API-laag, géén auth.
-Het is bewust de simpelste werkende versie om de waarde te laten zien. De
-echte productie-architectuur (Postgres + sync-job + API) staat in de
-`afas-schemabank/` repo klaar.
+Er zijn geen environment variables nodig. De site kan rechtstreeks vanuit deze
+repository door Vercel worden gebouwd.
