@@ -51,29 +51,31 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
                 <span aria-hidden="true" className={`text-[9px] transition-transform ${pureMenuOpen ? "rotate-180" : ""}`}>⌄</span>
               </button>
               {pureMenuOpen && (
-                <div
-                  role="menu"
-                  aria-label="PURE tools"
-                  className="absolute left-0 top-[calc(100%+0.55rem)] z-50 min-w-52 overflow-hidden rounded-xl border border-rule bg-white p-1.5 text-accent shadow-[0_18px_45px_rgba(52,12,70,0.2)]"
-                >
-                  <PureMenuItem
-                    active={tool === "planning"}
-                    onClick={() => {
-                      setTool("planning");
-                      setPureMenuOpen(false);
-                    }}
+                <div className="absolute left-0 top-full z-50 min-w-52 pt-2">
+                  <div
+                    role="menu"
+                    aria-label="PURE tools"
+                    className="overflow-hidden rounded-xl border border-rule bg-white p-1.5 text-accent shadow-[0_18px_45px_rgba(52,12,70,0.2)]"
                   >
-                    Planning 9 → 10
-                  </PureMenuItem>
-                  <PureMenuItem
-                    active={tool === "config"}
-                    onClick={() => {
-                      setTool("config");
-                      setPureMenuOpen(false);
-                    }}
-                  >
-                    Config 9 → 10
-                  </PureMenuItem>
+                    <PureMenuItem
+                      active={tool === "planning"}
+                      onClick={() => {
+                        setTool("planning");
+                        setPureMenuOpen(false);
+                      }}
+                    >
+                      Planning 9 → 10
+                    </PureMenuItem>
+                    <PureMenuItem
+                      active={tool === "config"}
+                      onClick={() => {
+                        setTool("config");
+                        setPureMenuOpen(false);
+                      }}
+                    >
+                      Config 9 → 10
+                    </PureMenuItem>
+                  </div>
                 </div>
               )}
             </div>
