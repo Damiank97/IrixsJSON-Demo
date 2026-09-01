@@ -92,8 +92,8 @@ export function PureMigrationTool() {
             <p className="font-mono text-xs text-accent">01</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Definities importeren en exporteren</h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
-              Importeer de weergave in PURE 9 en exporteer daarmee de planning. Importeer daarnaast de GetConnector
-              en exporteer de voorcalculatieregels.
+              Importeer de weergave in het vrije PURE 09-bestand en exporteer de regels. Importeer daarnaast de
+              GetConnector en exporteer de voorcalculatieregels.
             </p>
           </div>
           <div className="divide-y divide-rule border-y border-rule">

@@ -81,7 +81,7 @@ export function PureConfigMigrationTool() {
                 setResult(null);
                 setError("");
               }}
-              placeholder="bijv. swebru"
+              placeholder="bijv. irixs"
               spellCheck={false}
               className="min-w-0 flex-1 bg-transparent py-4 font-mono text-base text-ink outline-none placeholder:text-muted/50"
             />
