@@ -19,6 +19,9 @@ export function PureMigrationTool() {
   const [result, setResult] = useState<MigrationResult | null>(EMPTY_RESULT);
   const [busy, setBusy] = useState(false);
   const [includeImportDefinition, setIncludeImportDefinition] = useState(false);
+  const [freeFileNumber, setFreeFileNumber] = useState(9);
+
+  const freeFileLabel = String(freeFileNumber).padStart(2, "0");
 
   const canConvert = Boolean(source && lookup && !busy);
   const status = useMemo(() => {
@@ -92,15 +95,14 @@ export function PureMigrationTool() {
             <p className="font-mono text-xs text-accent">01</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Definities importeren en exporteren</h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
-              Importeer de weergave in het vrije PURE 09-bestand en exporteer de regels. Importeer daarnaast de
-              GetConnector en exporteer de voorcalculatieregels.
+              Kies het vrije bestand, importeer de bijbehorende weergave in PURE 9 en exporteer de regels.
+              Importeer daarnaast de GetConnector en exporteer de voorcalculatieregels.
             </p>
           </div>
           <div className="divide-y divide-rule border-y border-rule">
-            <DefinitionDownload
-              href="/downloads/PURE%209%20weergave%20voor%20export.viw"
-              title="PURE 9 weergave voor export.viw"
-              label="Weergave voor Vrije bestandswaarden 09"
+            <ViewDefinitionDownload
+              number={freeFileNumber}
+              onChange={setFreeFileNumber}
             />
             <DefinitionDownload
               href="/downloads/Voorcalculatieregels.gcn"
@@ -119,7 +121,7 @@ export function PureMigrationTool() {
         <FileCard
           number="02A"
           title="PURE 9 planning"
-          hint="Vrije bestandswaarden 09 · .xlsx, .xls of .csv"
+          hint={`Vrije bestandswaarden ${freeFileLabel} · .xlsx, .xls of .csv`}
           table={source}
           error={sourceError}
           onFile={(file) => selectFile(file, "source")}
@@ -298,5 +300,37 @@ function DefinitionDownload({ href, title, label }: { href: string; title: strin
       <div><p className="font-mono text-sm text-ink group-hover:text-accent">{title}</p><p className="mt-1 text-xs text-muted">{label}</p></div>
       <span className="text-sm text-muted group-hover:text-accent">Download ↓</span>
     </a>
+  );
+}
+
+function ViewDefinitionDownload({ number, onChange }: { number: number; onChange: (number: number) => void }) {
+  const numberLabel = String(number).padStart(2, "0");
+  const filename = `PURE 9 weergave voor export - Vrij bestand ${numberLabel}.viw`;
+  const href = `/downloads/${encodeURIComponent(filename)}`;
+
+  return (
+    <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="font-mono text-sm text-ink">PURE 9 weergave voor export.viw</p>
+        <p className="mt-1 text-xs text-muted">Volledige weergave voor Vrije bestandswaarden {numberLabel}</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <label>
+          <span className="sr-only">Kies vrij bestand</span>
+          <select
+            value={number}
+            onChange={(event) => onChange(Number(event.target.value))}
+            className="rounded-full border border-rule bg-white px-4 py-2 text-sm font-semibold text-ink outline-none transition focus:border-accent"
+          >
+            {Array.from({ length: 10 }, (_, index) => index + 1).map((value) => (
+              <option key={value} value={value}>Vrij bestand {String(value).padStart(2, "0")}</option>
+            ))}
+          </select>
+        </label>
+        <a href={href} download={filename} className="whitespace-nowrap text-sm text-muted hover:text-accent">
+          Download ↓
+        </a>
+      </div>
+    </div>
   );
 }
