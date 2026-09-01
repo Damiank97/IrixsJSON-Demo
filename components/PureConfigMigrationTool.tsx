@@ -141,7 +141,7 @@ function ToolIntro() {
       <div>
         <p className="tool-kicker">PURE configuratie · versie 9 naar 10</p>
         <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-[-0.035em] text-white md:text-5xl">Config migreren</h1>
-        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/72 md:text-base">
+        <p className="mt-4 max-w-2xl text-sm font-medium leading-relaxed text-white/80 md:text-base">
           Bouw een complete KVSet-import uit het PURE 9 app.config-bestand. Klantwaarden worden overgenomen;
           ontbrekende PURE 10-structuur wordt veilig aangevuld.
         </p>

@@ -76,7 +76,7 @@ export function PureMigrationTool() {
         <div>
         <p className="tool-kicker">PURE planning · versie 9 naar 10</p>
         <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-[-0.035em] text-white md:text-5xl">Planning migreren</h1>
-        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/72 md:text-base">
+        <p className="mt-4 max-w-2xl text-sm font-medium leading-relaxed text-white/80 md:text-base">
           Volg de drie stappen hieronder. De Toolbox koppelt iedere planningsregel aan de juiste werksoort-GUID
           en maakt daarna het importbestand voor PURE 10.
         </p>

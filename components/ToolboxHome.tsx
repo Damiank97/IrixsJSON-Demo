@@ -10,6 +10,7 @@ type Tool = "planning" | "config" | "schemas";
 
 export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }) {
   const [tool, setTool] = useState<Tool>("planning");
+  const [pureMenuOpen, setPureMenuOpen] = useState(false);
   const totalSchemas = connectors.reduce((sum, connector) => sum + connector.schema_count, 0);
   const totalExamples = connectors.reduce((sum, connector) => sum + connector.example_count, 0);
 
@@ -23,12 +24,59 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
             </div>
             <div>
               <p className="text-sm font-semibold tracking-tight">Irixs Toolbox</p>
-              <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-white/55">By Damian · interne tools</p>
+              <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-white/70">By Damian · interne tools</p>
             </div>
           </div>
-          <nav className="flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-white/5 p-1" aria-label="Toolbox onderdelen">
-            <Tab active={tool === "planning"} onClick={() => setTool("planning")}>Planning 9 → 10</Tab>
-            <Tab active={tool === "config"} onClick={() => setTool("config")}>Config 9 → 10</Tab>
+          <nav className="flex max-w-full gap-1 rounded-2xl border border-white/10 bg-white/5 p-1" aria-label="Toolbox onderdelen">
+            <div
+              className="relative"
+              onMouseEnter={() => setPureMenuOpen(true)}
+              onMouseLeave={() => setPureMenuOpen(false)}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setPureMenuOpen(false);
+              }}
+            >
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={pureMenuOpen}
+                onClick={() => setPureMenuOpen(true)}
+                className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+                  tool === "planning" || tool === "config"
+                    ? "bg-brand-yellow text-accent shadow-sm"
+                    : "text-white/75 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                PURE
+                <span aria-hidden="true" className={`text-[9px] transition-transform ${pureMenuOpen ? "rotate-180" : ""}`}>⌄</span>
+              </button>
+              {pureMenuOpen && (
+                <div
+                  role="menu"
+                  aria-label="PURE tools"
+                  className="absolute left-0 top-[calc(100%+0.55rem)] z-50 min-w-52 overflow-hidden rounded-xl border border-rule bg-white p-1.5 text-accent shadow-[0_18px_45px_rgba(52,12,70,0.2)]"
+                >
+                  <PureMenuItem
+                    active={tool === "planning"}
+                    onClick={() => {
+                      setTool("planning");
+                      setPureMenuOpen(false);
+                    }}
+                  >
+                    Planning 9 → 10
+                  </PureMenuItem>
+                  <PureMenuItem
+                    active={tool === "config"}
+                    onClick={() => {
+                      setTool("config");
+                      setPureMenuOpen(false);
+                    }}
+                  >
+                    Config 9 → 10
+                  </PureMenuItem>
+                </div>
+              )}
+            </div>
             <Tab active={tool === "schemas"} onClick={() => setTool("schemas")}>JSON Schemabank</Tab>
           </nav>
         </div>
@@ -68,6 +116,21 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   );
 }
 
+function PureMenuItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={`block w-full rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+        active ? "bg-brand-yellow/25 text-accent" : "text-muted hover:bg-accent-soft hover:text-accent"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function SchemaBank({ connectors, totalSchemas, totalExamples }: {
   connectors: ConnectorIndexItem[];
   totalSchemas: number;
@@ -79,7 +142,7 @@ function SchemaBank({ connectors, totalSchemas, totalExamples }: {
         <div>
           <p className="tool-kicker">AFAS UpdateConnectors</p>
           <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-[-0.035em] text-white md:text-5xl">JSON Schemabank</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/72 md:text-base">Vind een connectorstructuur en pak direct een bruikbaar voorbeeld voor je koppeling of test.</p>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/80 md:text-base">Vind een connectorstructuur en pak direct een bruikbaar voorbeeld voor je koppeling of test.</p>
         </div>
         <dl className="relative z-10 mt-7 grid grid-cols-3 gap-2 md:mt-0">
           <Stat label="Connectors" value={connectors.length} />
@@ -97,7 +160,7 @@ function SchemaBank({ connectors, totalSchemas, totalExamples }: {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="min-w-[88px] rounded-2xl border border-white/15 bg-white/10 px-3 py-3 text-center backdrop-blur">
-      <dt className="text-[8px] font-medium uppercase tracking-[0.14em] text-white/55">{label}</dt>
+      <dt className="text-[8px] font-medium uppercase tracking-[0.14em] text-white/70">{label}</dt>
       <dd className="mt-1 text-xl font-semibold tabular-nums text-white">{value}</dd>
     </div>
   );
