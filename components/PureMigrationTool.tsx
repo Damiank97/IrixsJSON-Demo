@@ -71,24 +71,26 @@ export function PureMigrationTool() {
   }
 
   return (
-    <div className="space-y-12">
-      <section>
-        <p className="mb-5 text-xs uppercase tracking-[0.25em] text-muted">PURE migratie · versie 9 naar 10</p>
-        <h1 className="font-display text-5xl leading-[0.98] tracking-tightest text-ink md:text-7xl">
-          PURE 9-planning omzetten
-          <br /><em className="text-accent">naar PURE 10.</em>
-        </h1>
-        <p className="mt-7 max-w-2xl text-base leading-relaxed text-muted">
+    <div className="space-y-10">
+      <section className="tool-intro">
+        <div>
+        <p className="tool-kicker">PURE planning · versie 9 naar 10</p>
+        <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-[-0.035em] text-white md:text-5xl">Planning migreren</h1>
+        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/72 md:text-base">
           Volg de drie stappen hieronder. De Toolbox koppelt iedere planningsregel aan de juiste werksoort-GUID
           en maakt daarna het importbestand voor PURE 10.
         </p>
+        </div>
+        <div className="tool-chip-grid" aria-label="Uitvoercontroles">
+          <span>CSV met puntkomma</span><span>GUID-controle</span><span>22 vaste kolommen</span><span>Week en dag</span>
+        </div>
       </section>
 
-      <section className="border-y border-rule py-8">
+      <section className="tool-card p-6 md:p-8">
         <div className="grid gap-8 md:grid-cols-[0.8fr_1.2fr]">
           <div>
             <p className="font-mono text-xs text-accent">01</p>
-            <h2 className="mt-3 font-display text-4xl text-ink">Definities importeren en exporteren</h2>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Definities importeren en exporteren</h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
               Importeer de weergave in PURE 9 en exporteer daarmee de planning. Importeer daarnaast de GetConnector
               en exporteer de voorcalculatieregels.
@@ -111,7 +113,7 @@ export function PureMigrationTool() {
 
       <div>
         <p className="font-mono text-xs text-accent">02</p>
-        <h2 className="mt-3 font-display text-4xl text-ink">Beide exports uploaden</h2>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Beide exports uploaden</h2>
       </div>
       <section className="grid gap-5 md:grid-cols-2">
         <FileCard
@@ -132,17 +134,17 @@ export function PureMigrationTool() {
         />
       </section>
 
-      <section className="border-y border-rule py-8">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+      <section className="tool-status-bar">
+        <div className="flex w-full flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-mono text-xs text-accent">03 · Converteren</p>
-            <p className="mt-1 font-display text-3xl text-ink">{status}</p>
+            <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">{status}</p>
           </div>
           <button
             type="button"
             disabled={!canConvert}
             onClick={convert}
-            className="bg-accent px-7 py-4 text-sm font-semibold text-canvas transition hover:bg-accent-ring disabled:cursor-not-allowed disabled:opacity-35"
+            className="tool-button-primary"
           >
             {busy ? "Controleren…" : "Controleer en converteer"}
           </button>
@@ -158,7 +160,7 @@ export function PureMigrationTool() {
         />
       )}
 
-      <details className="border-t border-rule pt-8 text-sm text-muted">
+      <details className="tool-card p-6 text-sm text-muted">
         <summary className="cursor-pointer font-semibold text-ink">Vaste uitvoer en controles bekijken</summary>
         <div className="mt-5 grid gap-8 md:grid-cols-2">
           <div>
@@ -189,15 +191,15 @@ function FileCard({ number, title, hint, table, error, onFile }: {
   onFile: (file: File | undefined) => void;
 }) {
   return (
-    <label className="group cursor-pointer border border-rule bg-paper p-6 transition hover:border-accent">
+    <label className="tool-card group cursor-pointer p-6 transition hover:border-brand-yellow">
       <input type="file" accept=".xlsx,.xls,.csv,.tsv" className="sr-only" onChange={(event) => onFile(event.target.files?.[0])} />
       <div className="flex items-start justify-between gap-5">
         <div>
           <p className="font-mono text-xs text-accent">{number}</p>
-          <h2 className="mt-3 font-display text-3xl text-ink">{title}</h2>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">{title}</h2>
           <p className="mt-2 text-xs text-muted">{hint}</p>
         </div>
-        <span className="border border-rule px-3 py-2 text-xs text-muted transition group-hover:border-accent group-hover:text-accent">Kies bestand</span>
+        <span className="tool-button-secondary shrink-0">Kies bestand</span>
       </div>
       {table && (
         <div className="mt-7 border-t border-rule pt-4">
@@ -218,8 +220,8 @@ function ResultPanel({ result, onDownload, includeImportDefinition, onIncludeImp
 }) {
   if (result.errors.length) {
     return (
-      <section className="border border-method-delete/30 bg-red-50 p-6">
-        <h2 className="font-display text-3xl text-method-delete">Nog niet importeren</h2>
+      <section className="rounded-2xl border border-method-delete/30 bg-danger-soft p-6">
+        <h2 className="text-2xl font-semibold text-method-delete">Nog niet importeren</h2>
         <ul className="mt-4 space-y-2 text-sm text-method-delete">
           {result.errors.map((error, index) => <li key={`${index}-${error}`}>— {error}</li>)}
         </ul>
@@ -230,15 +232,15 @@ function ResultPanel({ result, onDownload, includeImportDefinition, onIncludeImp
   const stats = result.stats;
   return (
     <section className="space-y-7">
-      <div className="border border-method-post/30 bg-green-50 p-6 md:p-8">
+      <div className="rounded-2xl border border-method-post/25 bg-success-soft p-6 md:p-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-method-post">Alle controles geslaagd</p>
-            <h2 className="mt-2 font-display text-4xl text-ink">{stats.convertedRows.toLocaleString("nl-NL")} regels klaar</h2>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-ink">{stats.convertedRows.toLocaleString("nl-NL")} regels klaar</h2>
             <p className="mt-2 text-sm text-muted">{stats.totalHours.toLocaleString("nl-NL", { maximumFractionDigits: 6 })} uur · 22 vaste kolommen · UTF-8 BOM · CRLF</p>
           </div>
           <div className="flex flex-col items-start gap-3 md:items-end">
-            <button type="button" onClick={onDownload} className="bg-method-post px-7 py-4 text-sm font-semibold text-white transition hover:opacity-90">
+            <button type="button" onClick={onDownload} className="tool-button-primary">
               Download PURE 10-CSV
             </button>
             <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
@@ -287,7 +289,7 @@ function ResultPanel({ result, onDownload, includeImportDefinition, onIncludeImp
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
-  return <div className="bg-paper p-4"><p className="font-display text-3xl tabular-nums text-ink">{value.toLocaleString("nl-NL")}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-muted">{label}</p></div>;
+  return <div className="bg-paper p-4"><p className="text-2xl font-semibold tabular-nums text-ink">{value.toLocaleString("nl-NL")}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</p></div>;
 }
 
 function DefinitionDownload({ href, title, label }: { href: string; title: string; label: string }) {

@@ -8,26 +8,39 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Cream / paper background — niet pure wit
-        canvas: "#F8F4ED",
-        paper: "#FBF8F2",
-        ink: "#15140F",
-        muted: "#6B6557",
-        rule: "#E5DCC9",
-        // Diepe aubergine accent — Irixs-paars maar refined
+        canvas: "#F5F2F6",
+        paper: "#FFFFFF",
+        ink: "#340C46",
+        muted: "#716677",
+        rule: "#DED6E2",
         accent: {
-          DEFAULT: "#3A1F47",
-          soft: "#F0E8EC",
-          ring: "#5A3268",
+          DEFAULT: "#340C46",
+          soft: "#EEE8F1",
+          ring: "#5D3470",
+        },
+        brand: {
+          yellow: "#FDB940",
+          "yellow-dark": "#C77D00",
+          purple: "#6A538E",
+          blue: "#143A84",
+          mist: "#ECE8EF",
+        },
+        success: {
+          DEFAULT: "#247A52",
+          soft: "#EDF8F2",
+        },
+        danger: {
+          DEFAULT: "#A62E3A",
+          soft: "#FFF0F1",
         },
         method: {
-          post: "#2D5A3A",     // diep groen
-          put:  "#7A5821",     // mosterd/oker
-          delete: "#7A2828",   // diep rood
+          post: "#247A52",
+          put:  "#C77D00",
+          delete: "#A62E3A",
         },
       },
       fontFamily: {
-        display: ["var(--font-display)", "Georgia", "serif"],
+        display: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
         sans:    ["var(--font-sans)", "ui-sans-serif", "system-ui"],
         mono:    ["var(--font-mono)", "ui-monospace", "monospace"],
       },
