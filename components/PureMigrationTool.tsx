@@ -92,16 +92,17 @@ export function PureMigrationTool() {
             <p className="font-mono text-xs text-accent">01</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Bronbestanden voorbereiden</h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
-              Exporteer de planning uit het vrije bestand dat de klant gebruikt. Dat mag Vrij bestand 1 t/m 10 zijn.
-              Importeer daarnaast de GetConnector voor de voorcalculatieregels en exporteer deze gegevens.
+              Maak in PURE 9 op het gebruikte vrije bestand een weergave aan met de naam <strong>PURE - Export</strong>.
+              Selecteer vervolgens alle beschikbare velden één voor één van boven naar beneden.
             </p>
-            <details className="mt-5 text-sm text-muted">
-              <summary className="cursor-pointer font-semibold text-ink">Benodigde planningvelden bekijken</summary>
-              <p className="mt-3 leading-relaxed">
-                BudgetLineGuid, DataType, EmployeeProfitCode, HourAmount, PhaseProfitCode, PureGuid, Remarks,
-                QuotationID, Datum, de kolom Vrij bestand 1 t/m 10, Uurtype, StartTime, Period en PeriodType.
-              </p>
-            </details>
+            <p className="mt-4 border-l-2 border-accent pl-4 text-sm leading-relaxed text-muted">
+              Heeft een veld een uitklappijltje? Selecteer dan alleen het bovenliggende veld. Je hoeft het veld niet
+              open te klappen en geen onderliggende velden toe te voegen.
+            </p>
+            <p className="mt-4 text-sm leading-relaxed text-muted">
+              Exporteer daarna de regels naar Excel of CSV. Importeer daarnaast de GetConnector voor de
+              voorcalculatieregels en exporteer ook deze gegevens.
+            </p>
           </div>
           <div className="divide-y divide-rule border-y border-rule">
             <DefinitionDownload
@@ -121,7 +122,7 @@ export function PureMigrationTool() {
         <FileCard
           number="02A"
           title="PURE 9 planning"
-          hint="Planning-GetConnector-export · .xlsx, .xls of .csv"
+          hint="Export uit de weergave PURE - Export · .xlsx, .xls of .csv"
           table={source}
           error={sourceError}
           onFile={(file) => selectFile(file, "source")}

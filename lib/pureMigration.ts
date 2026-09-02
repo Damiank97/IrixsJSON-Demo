@@ -25,21 +25,23 @@ export const PURE10_COLUMNS = [
   "Omschrijving intern",
 ] as const;
 
-const PURE9_REQUIRED = [
-  "BudgetLineGuid",
-  "DataType",
-  "EmployeeProfitCode",
-  "HourAmount",
-  "PhaseProfitCode",
-  "PureGuid",
-  "Remarks",
-  "QuotationID",
-  "Datum",
-  "Uurtype",
-  "StartTime",
-  "Period",
-  "PeriodType",
-] as const;
+const PURE9_FIELDS = {
+  BudgetLineGuid: ["BudgetLineGuid"],
+  DataType: ["DataType"],
+  EmployeeProfitCode: ["EmployeeProfitCode", "Medewerker"],
+  HourAmount: ["HourAmount", "Aantal"],
+  PhaseProfitCode: ["PhaseProfitCode", "Phase"],
+  PureGuid: ["PureGuid"],
+  Remarks: ["Remarks"],
+  QuotationID: ["QuotationID"],
+  Datum: ["Datum"],
+  Uurtype: ["Uurtype"],
+  StartTime: ["StartTime", "Starttijd"],
+  Period: ["Period", "Periode"],
+  PeriodType: ["PeriodType", "Periodetype"],
+} as const;
+
+type Pure9Field = keyof typeof PURE9_FIELDS;
 
 const LOOKUP_REQUIRED = ["GUID regel", "Type item code", "Code"] as const;
 
@@ -104,7 +106,13 @@ export async function readTable(file: File): Promise<ParsedTable> {
 export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): MigrationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  validateHeaders(source, PURE9_REQUIRED, "PURE 9-bestand", errors);
+  const sourceColumns = resolveSourceColumns(source.headers);
+  const missingSourceFields = (Object.keys(PURE9_FIELDS) as Pure9Field[])
+    .filter((field) => !sourceColumns[field])
+    .map((field) => PURE9_FIELDS[field].join(" / "));
+  if (missingSourceFields.length) {
+    errors.push(`PURE 9-bestand: ontbrekende kolommen: ${missingSourceFields.join(", ")}.`);
+  }
   validateHeaders(lookup, LOOKUP_REQUIRED, "GetConnector", errors);
   const freeFileHeader = findFreeFileHeader(source.headers);
   if (!freeFileHeader) {
@@ -154,21 +162,25 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     if (errors.length < issueLimit) errors.push(message);
     else hiddenIssueCount += 1;
   };
+  const sourceValue = (row: TableRow, field: Pure9Field) => {
+    const header = sourceColumns[field];
+    return header ? row[header] : undefined;
+  };
 
   for (const [index, row] of source.rows.entries()) {
     const rowNumber = index + 2;
-    const budgetGuid = normalizeGuid(row.BudgetLineGuid);
-    const eventGuid = normalizeGuid(row.PureGuid);
+    const budgetGuid = normalizeGuid(sourceValue(row, "BudgetLineGuid"));
+    const eventGuid = normalizeGuid(sourceValue(row, "PureGuid"));
     const match = byGuid.get(budgetGuid);
-    const amount = parseNumber(row.HourAmount);
-    const date = formatDate(row.Datum);
-    const dataType = parseNumber(row.DataType);
-    const periodType = parseNumber(row.PeriodType);
-    const employee = textValue(row.EmployeeProfitCode);
-    const description = textValue(row.Remarks);
+    const amount = parseNumber(sourceValue(row, "HourAmount"));
+    const date = formatDate(sourceValue(row, "Datum"));
+    const dataType = parseNumber(sourceValue(row, "DataType"));
+    const periodType = parseNumber(sourceValue(row, "PeriodType"));
+    const employee = textValue(sourceValue(row, "EmployeeProfitCode"));
+    const description = textValue(sourceValue(row, "Remarks"));
 
     if (!budgetGuid) addRowError(`PURE 9 regel ${rowNumber}: BudgetLineGuid is leeg.`);
-    else if (!match) addRowError(`PURE 9 regel ${rowNumber}: geen match voor ${textValue(row.BudgetLineGuid)}.`);
+    else if (!match) addRowError(`PURE 9 regel ${rowNumber}: geen match voor ${textValue(sourceValue(row, "BudgetLineGuid"))}.`);
     else {
       stats.matchedRows += 1;
       if (!match.code) addRowError(`PURE 9 regel ${rowNumber}: de gematchte werksoort heeft geen Code.`);
@@ -177,11 +189,11 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
       }
     }
     if (!eventGuid) addRowError(`PURE 9 regel ${rowNumber}: PureGuid/Event-guid is leeg.`);
-    else if (seenEvents.has(eventGuid)) addRowError(`PURE 9 regel ${rowNumber}: dubbele Event-guid ${textValue(row.PureGuid)}.`);
+    else if (seenEvents.has(eventGuid)) addRowError(`PURE 9 regel ${rowNumber}: dubbele Event-guid ${textValue(sourceValue(row, "PureGuid"))}.`);
     else seenEvents.add(eventGuid);
     if (amount === null || amount < 0) addRowError(`PURE 9 regel ${rowNumber}: ongeldig aantal uren.`);
     if (!date) addRowError(`PURE 9 regel ${rowNumber}: ongeldige datum.`);
-    if (dataType !== 2) addRowError(`PURE 9 regel ${rowNumber}: DataType ${textValue(row.DataType)} wordt niet ondersteund.`);
+    if (dataType !== 2) addRowError(`PURE 9 regel ${rowNumber}: DataType ${textValue(sourceValue(row, "DataType"))} wordt niet ondersteund.`);
     if (periodType !== 0 && periodType !== 1) addRowError(`PURE 9 regel ${rowNumber}: PeriodType is niet 0 of 1.`);
     if (description.length > 50) addRowError(`PURE 9 regel ${rowNumber}: Omschrijving is langer dan 50 tekens.`);
 
@@ -192,7 +204,7 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     if (periodType === 1) stats.weeklyRows += 1;
     if (periodType === 0) stats.dailyRows += 1;
     if (!employee) stats.blankEmployees += 1;
-    const startTime = formatTime(row.StartTime);
+    const startTime = formatTime(sourceValue(row, "StartTime"));
     if (startTime) stats.startTimes += 1;
 
     output.push([
@@ -204,16 +216,16 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
       "0",
       periodType === null ? "" : String(periodType),
       employee,
-      textValue(row.QuotationID),
+      textValue(sourceValue(row, "QuotationID")),
       match?.code ?? "",
-      textValue(row.PhaseProfitCode),
+      textValue(sourceValue(row, "PhaseProfitCode")),
       "",
       "",
       "",
       "",
-      textValue(row.BudgetLineGuid),
-      textValue(row.PureGuid),
-      textValue(row.Period),
+      textValue(sourceValue(row, "BudgetLineGuid")),
+      textValue(sourceValue(row, "PureGuid")),
+      textValue(sourceValue(row, "Period")),
       "",
       "0",
       "1",
@@ -238,8 +250,19 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
   };
 }
 
+function resolveSourceColumns(headers: string[]): Record<Pure9Field, string | undefined> {
+  return Object.fromEntries(
+    (Object.entries(PURE9_FIELDS) as [Pure9Field, readonly string[]][]).map(([field, aliases]) => [
+      field,
+      headers.find((header) => aliases.some((alias) => header.trim().toLowerCase() === alias.toLowerCase())),
+    ]),
+  ) as Record<Pure9Field, string | undefined>;
+}
+
 function findFreeFileHeader(headers: string[]): string | undefined {
-  return headers.find((header) => /^vrij bestand 0?(?:[1-9]|10)$/i.test(header.trim()));
+  return headers.find((header) =>
+    /^vrij bestand 0?(?:[1-9]|10)$/i.test(header.trim()) || header.trim().toLowerCase() === "omschrijving",
+  );
 }
 
 function matrixToTable(fileName: string, matrix: Cell[][]): ParsedTable {
