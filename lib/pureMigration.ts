@@ -59,6 +59,9 @@ export type MigrationStats = {
   skippedBeforeDate: number;
   convertedRows: number;
   matchedRows: number;
+  recoveredCodes: number;
+  blankCodes: number;
+  nonWorkTypes: number;
   weeklyRows: number;
   dailyRows: number;
   fractionalAmounts: number;
@@ -154,6 +157,9 @@ export function migratePure9ToPure10(
     skippedBeforeDate,
     convertedRows: 0,
     matchedRows: 0,
+    recoveredCodes: 0,
+    blankCodes: 0,
+    nonWorkTypes: 0,
     weeklyRows: 0,
     dailyRows: 0,
     fractionalAmounts: 0,
@@ -196,9 +202,19 @@ export function migratePure9ToPure10(
     errors.push(`De GetConnector bevat ${duplicateLookupGuids.size} dubbele GUID(s).`);
   }
 
+  const codesByMissingGuid = new Map<string, Set<string>>();
+  for (const { row } of planningRows) {
+    const budgetGuid = normalizeGuid(sourceValue(row, "BudgetLineGuid"));
+    if (!budgetGuid || byGuid.has(budgetGuid)) continue;
+    const code = codeFromDescription(freeFileHeader ? row[freeFileHeader] : undefined);
+    if (!code) continue;
+    const codes = codesByMissingGuid.get(budgetGuid) ?? new Set<string>();
+    codes.add(code);
+    codesByMissingGuid.set(budgetGuid, codes);
+  }
+
   const output: string[][] = [];
   const seenEvents = new Set<string>();
-  const missingGuidRows = new Map<string, { displayGuid: string; count: number; firstRow: number }>();
   const issueLimit = 30;
   let hiddenIssueCount = 0;
   const addRowError = (message: string) => {
@@ -209,6 +225,14 @@ export function migratePure9ToPure10(
     const budgetGuid = normalizeGuid(sourceValue(row, "BudgetLineGuid"));
     const eventGuid = normalizeGuid(sourceValue(row, "PureGuid"));
     const match = byGuid.get(budgetGuid);
+    let resolvedCode = match?.code ?? "";
+    if (!resolvedCode) {
+      resolvedCode = codeFromDescription(freeFileHeader ? row[freeFileHeader] : undefined);
+    }
+    if (!resolvedCode && !match) {
+      const groupCodes = codesByMissingGuid.get(budgetGuid);
+      if (groupCodes?.size === 1) resolvedCode = [...groupCodes][0];
+    }
     const amount = parseNumber(sourceValue(row, "HourAmount"));
     const date = formatDate(sourceValue(row, "Datum"));
     const periodType = parseNumber(sourceValue(row, "PeriodType")) ?? (inferBlankPeriodsAsWeekly ? 1 : null);
@@ -216,22 +240,15 @@ export function migratePure9ToPure10(
     const description = textValue(sourceValue(row, "Remarks"));
 
     if (!budgetGuid) addRowError(`PURE 9 regel ${rowNumber}: BudgetLineGuid is leeg.`);
-    else if (!match) {
-      const missing = missingGuidRows.get(budgetGuid);
-      if (missing) missing.count += 1;
-      else missingGuidRows.set(budgetGuid, {
-        displayGuid: textValue(sourceValue(row, "BudgetLineGuid")),
-        count: 1,
-        firstRow: rowNumber,
-      });
-    }
-    else {
+    else if (match) {
       stats.matchedRows += 1;
-      if (!match.code) addRowError(`PURE 9 regel ${rowNumber}: de gematchte werksoort heeft geen Code.`);
       if (match.type.toLowerCase() !== "wst") {
-        addRowError(`PURE 9 regel ${rowNumber}: type '${match.type || "leeg"}' is geen werksoort (Wst).`);
+        stats.nonWorkTypes += 1;
       }
+    } else if (resolvedCode) {
+      stats.recoveredCodes += 1;
     }
+    if (!resolvedCode) stats.blankCodes += 1;
     if (!eventGuid) addRowError(`PURE 9 regel ${rowNumber}: PureGuid/Event-guid is leeg.`);
     else if (seenEvents.has(eventGuid)) addRowError(`PURE 9 regel ${rowNumber}: dubbele Event-guid ${textValue(sourceValue(row, "PureGuid"))}.`);
     else seenEvents.add(eventGuid);
@@ -260,7 +277,7 @@ export function migratePure9ToPure10(
       periodType === null ? "" : String(periodType),
       employee,
       textValue(sourceValue(row, "QuotationID")),
-      match?.code ?? "",
+      resolvedCode,
       textValue(sourceValue(row, "PhaseProfitCode")),
       "",
       "",
@@ -276,15 +293,10 @@ export function migratePure9ToPure10(
     ]);
   }
 
-  if (missingGuidRows.size) {
-    const missingRows = [...missingGuidRows.values()].reduce((total, item) => total + item.count, 0);
-    errors.unshift(`${missingRows.toLocaleString("nl-NL")} planningsregels verwijzen naar ${missingGuidRows.size.toLocaleString("nl-NL")} GUID(s) die niet in de GetConnector staan.`);
-    for (const item of [...missingGuidRows.values()].sort((a, b) => b.count - a.count)) {
-      addRowError(`${item.displayGuid}: ${item.count.toLocaleString("nl-NL")} regel(s), vanaf PURE 9-regel ${item.firstRow}.`);
-    }
-  }
-
   if (hiddenIssueCount) errors.push(`Daarnaast zijn nog ${hiddenIssueCount} fouten niet getoond.`);
+  if (stats.recoveredCodes) warnings.push(`${stats.recoveredCodes.toLocaleString("nl-NL")} werksoortcodes zijn uit de PURE 9-omschrijving hersteld.`);
+  if (stats.blankCodes) warnings.push(`${stats.blankCodes.toLocaleString("nl-NL")} regels bevatten nergens een werksoortcode en zijn met een lege Code meegenomen.`);
+  if (stats.nonWorkTypes) warnings.push(`${stats.nonWorkTypes.toLocaleString("nl-NL")} regels verwijzen naar een ander voorcalculatietype dan Wst en zijn ongewijzigd meegenomen.`);
   if (stats.blankEmployees) warnings.push(`${stats.blankEmployees.toLocaleString("nl-NL")} regels hebben bewust geen medewerker.`);
   if (stats.dailyRows) warnings.push(`${stats.dailyRows.toLocaleString("nl-NL")} dagregels worden met Periodetype 0 overgenomen.`);
   if (stats.startTimes) warnings.push(`${stats.startTimes.toLocaleString("nl-NL")} starttijden worden als uu:mm geschreven.`);
@@ -368,6 +380,10 @@ function textValue(value: Cell): string {
 
 function normalizeGuid(value: Cell): string {
   return textValue(value).replace(/[{}]/g, "").toLowerCase();
+}
+
+function codeFromDescription(value: Cell): string {
+  return textValue(value).match(/\/I([^/\s]+)/i)?.[1]?.trim() ?? "";
 }
 
 function parseNumber(value: Cell): number | null {

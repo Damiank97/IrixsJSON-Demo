@@ -214,7 +214,7 @@ export function PureMigrationTool() {
             <ul className="space-y-2">
               <li>Alle verplichte bron- en GetConnector-velden</li>
               <li>Ontbrekende of dubbele GUID's</li>
-              <li>Alleen werksoorten van type Wst</li>
+              <li>Werksoortcodes uit de GetConnector of PURE 9-omschrijving</li>
               <li>Geldige uren, datums, perioden en Event-guid's</li>
             </ul>
           </div>
@@ -314,7 +314,7 @@ function ResultPanel({ result, onDownload, includeImportDefinition, onIncludeImp
         <Metric label="GUID-matches" value={stats.matchedRows} />
         <Metric label="Weekregels" value={stats.weeklyRows} />
         <Metric label="Dagregels" value={stats.dailyRows} />
-        <Metric label="Decimalen" value={stats.fractionalAmounts} />
+        <Metric label="Codes hersteld" value={stats.recoveredCodes} />
         <Metric label="Starttijden" value={stats.startTimes} />
         <Metric label="Zonder medewerker" value={stats.blankEmployees} />
       </div>
