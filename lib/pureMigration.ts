@@ -35,7 +35,6 @@ const PURE9_REQUIRED = [
   "Remarks",
   "QuotationID",
   "Datum",
-  "Vrij bestand 9",
   "Uurtype",
   "StartTime",
   "Period",
@@ -107,6 +106,10 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
   const warnings: string[] = [];
   validateHeaders(source, PURE9_REQUIRED, "PURE 9-bestand", errors);
   validateHeaders(lookup, LOOKUP_REQUIRED, "GetConnector", errors);
+  const freeFileHeader = findFreeFileHeader(source.headers);
+  if (!freeFileHeader) {
+    errors.push("Het PURE 9-bestand mist de kolom 'Vrij bestand 1' t/m 'Vrij bestand 10'.");
+  }
 
   const stats: MigrationStats = {
     sourceRows: source.rows.length,
@@ -194,7 +197,7 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
 
     output.push([
       date,
-      textValue(row["Vrij bestand 9"]),
+      freeFileHeader ? textValue(row[freeFileHeader]) : "",
       amount === null ? "" : formatAmount(amount),
       startTime,
       description,
@@ -233,6 +236,10 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     stats,
     preview: output.slice(0, 8),
   };
+}
+
+function findFreeFileHeader(headers: string[]): string | undefined {
+  return headers.find((header) => /^vrij bestand 0?(?:[1-9]|10)$/i.test(header.trim()));
 }
 
 function matrixToTable(fileName: string, matrix: Cell[][]): ParsedTable {
