@@ -120,6 +120,11 @@ export function PureMigrationTool() {
               title="Voorcalculatieregels.gcn"
               label="GetConnector voor de werksoort-GUID's"
             />
+            <DefinitionDownload
+              href="/downloads/Import%20PURE10.ipd"
+              title="Import PURE10.ipd"
+              label="Importdefinitie voor het geconverteerde CSV-bestand"
+            />
           </div>
         </div>
       </section>
