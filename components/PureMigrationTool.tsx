@@ -26,6 +26,7 @@ export function PureMigrationTool() {
   const [lookupError, setLookupError] = useState("");
   const [result, setResult] = useState<MigrationResult | null>(EMPTY_RESULT);
   const [busy, setBusy] = useState(false);
+  const [includeAllDates, setIncludeAllDates] = useState(true);
   const [migrationStartDate, setMigrationStartDate] = useState(todayIso);
   const [includeImportDefinition, setIncludeImportDefinition] = useState(false);
 
@@ -54,7 +55,7 @@ export function PureMigrationTool() {
     if (!source || !lookup) return;
     setBusy(true);
     window.setTimeout(() => {
-      setResult(migratePure9ToPure10(source, lookup, migrationStartDate));
+      setResult(migratePure9ToPure10(source, lookup, includeAllDates ? undefined : migrationStartDate));
       setBusy(false);
     }, 30);
   }
@@ -153,21 +154,37 @@ export function PureMigrationTool() {
             <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">{status}</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="text-xs font-semibold text-muted">
-              Planning meenemen vanaf
-              <input
-                type="date"
-                value={migrationStartDate}
-                onChange={(event) => {
-                  setMigrationStartDate(event.target.value);
-                  setResult(null);
-                }}
-                className="mt-2 block min-h-12 rounded-xl border border-rule bg-paper px-4 py-2 text-sm font-semibold text-ink outline-none focus:border-accent"
-              />
-            </label>
+            <div className="flex flex-col gap-3">
+              <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-rule bg-paper px-4 py-2 text-sm font-semibold text-ink">
+                <input
+                  type="checkbox"
+                  checked={includeAllDates}
+                  onChange={(event) => {
+                    setIncludeAllDates(event.target.checked);
+                    setResult(null);
+                  }}
+                  className="h-4 w-4 accent-[#FFB833]"
+                />
+                Alle datums meenemen
+              </label>
+              {!includeAllDates && (
+                <label className="text-xs font-semibold text-muted">
+                  Planning meenemen vanaf
+                  <input
+                    type="date"
+                    value={migrationStartDate}
+                    onChange={(event) => {
+                      setMigrationStartDate(event.target.value);
+                      setResult(null);
+                    }}
+                    className="mt-2 block min-h-12 rounded-xl border border-rule bg-paper px-4 py-2 text-sm font-semibold text-ink outline-none focus:border-accent"
+                  />
+                </label>
+              )}
+            </div>
             <button
               type="button"
-              disabled={!canConvert || !migrationStartDate}
+              disabled={!canConvert || (!includeAllDates && !migrationStartDate)}
               onClick={convert}
               className="tool-button-primary"
             >
@@ -175,7 +192,9 @@ export function PureMigrationTool() {
             </button>
           </div>
         </div>
-        <p className="mt-4 text-xs text-muted">Oudere dagregels worden overgeslagen. Bij weekplanning blijft de lopende week behouden.</p>
+        <p className="mt-4 text-xs text-muted">
+          Standaard wordt alle planning verwerkt. Zet ‘Alle datums meenemen’ uit als je bewust alleen vanaf een bepaalde datum wilt migreren.
+        </p>
       </section>
 
       {result && (
