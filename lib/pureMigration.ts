@@ -56,6 +56,7 @@ export type ParsedTable = {
 
 export type MigrationStats = {
   sourceRows: number;
+  skippedBeforeDate: number;
   convertedRows: number;
   matchedRows: number;
   weeklyRows: number;
@@ -103,7 +104,11 @@ export async function readTable(file: File): Promise<ParsedTable> {
   return matrixToTable(file.name, matrix);
 }
 
-export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): MigrationResult {
+export function migratePure9ToPure10(
+  source: ParsedTable,
+  lookup: ParsedTable,
+  migrationStartDate?: string,
+): MigrationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const sourceColumns = resolveSourceColumns(source.headers);
@@ -122,16 +127,31 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     const header = sourceColumns[field];
     return header ? row[header] : undefined;
   };
-  const planningRows = source.rows
+  const allPlanningRows = source.rows
     .map((row, index) => ({ row, rowNumber: index + 2 }))
     .filter(({ row }) => parseNumber(sourceValue(row, "DataType")) === 2);
-  const ignoredSourceRows = source.rows.length - planningRows.length;
-  const inferBlankPeriodsAsWeekly = planningRows.length > 0 && planningRows.every(({ row }) =>
+  const ignoredSourceRows = source.rows.length - allPlanningRows.length;
+  const inferBlankPeriodsAsWeekly = allPlanningRows.length > 0 && allPlanningRows.every(({ row }) =>
     parseNumber(sourceValue(row, "PeriodType")) === null && isMondayDate(sourceValue(row, "Datum")),
   );
+  const migrationStart = migrationStartDate ? parseIsoDate(migrationStartDate) : null;
+  if (migrationStartDate && migrationStart === null) {
+    errors.push("Kies een geldige migratiedatum.");
+  }
+  const planningRows = migrationStart === null
+    ? allPlanningRows
+    : allPlanningRows.filter(({ row }) => {
+      const date = dateSerial(sourceValue(row, "Datum"));
+      if (date === null) return true;
+      const periodType = parseNumber(sourceValue(row, "PeriodType")) ?? (inferBlankPeriodsAsWeekly ? 1 : null);
+      const finalPlanningDay = periodType === 1 ? date + 6 : date;
+      return finalPlanningDay >= migrationStart;
+    });
+  const skippedBeforeDate = allPlanningRows.length - planningRows.length;
 
   const stats: MigrationStats = {
     sourceRows: planningRows.length,
+    skippedBeforeDate,
     convertedRows: 0,
     matchedRows: 0,
     weeklyRows: 0,
@@ -144,11 +164,15 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
 
   if (errors.length) return { csv: null, errors, warnings, stats, preview: [] };
   if (!source.rows.length) errors.push("Het PURE 9-bestand bevat geen gegevensregels.");
-  else if (!planningRows.length) errors.push("Het PURE 9-bestand bevat geen planningsregels met DataType 2.");
+  else if (!allPlanningRows.length) errors.push("Het PURE 9-bestand bevat geen planningsregels met DataType 2.");
+  else if (!planningRows.length) errors.push("Er staan geen planningsregels op of na de gekozen migratiedatum.");
   if (!lookup.rows.length) errors.push("De GetConnector bevat geen voorcalculatieregels.");
   if (errors.length) return { csv: null, errors, warnings, stats, preview: [] };
   if (ignoredSourceRows) {
     warnings.push(`${ignoredSourceRows.toLocaleString("nl-NL")} overige regels uit het vrije bestand zijn genegeerd.`);
+  }
+  if (skippedBeforeDate && migrationStartDate) {
+    warnings.push(`${skippedBeforeDate.toLocaleString("nl-NL")} oude planningsregels vóór ${formatIsoForDutch(migrationStartDate)} zijn overgeslagen.`);
   }
   if (inferBlankPeriodsAsWeekly) {
     warnings.push("PeriodType is leeg; omdat alle planningsdatums op maandag vallen, zijn de regels als weekplanning verwerkt.");
@@ -174,6 +198,7 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
 
   const output: string[][] = [];
   const seenEvents = new Set<string>();
+  const missingGuidRows = new Map<string, { displayGuid: string; count: number; firstRow: number }>();
   const issueLimit = 30;
   let hiddenIssueCount = 0;
   const addRowError = (message: string) => {
@@ -191,7 +216,15 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     const description = textValue(sourceValue(row, "Remarks"));
 
     if (!budgetGuid) addRowError(`PURE 9 regel ${rowNumber}: BudgetLineGuid is leeg.`);
-    else if (!match) addRowError(`PURE 9 regel ${rowNumber}: geen match voor ${textValue(sourceValue(row, "BudgetLineGuid"))}.`);
+    else if (!match) {
+      const missing = missingGuidRows.get(budgetGuid);
+      if (missing) missing.count += 1;
+      else missingGuidRows.set(budgetGuid, {
+        displayGuid: textValue(sourceValue(row, "BudgetLineGuid")),
+        count: 1,
+        firstRow: rowNumber,
+      });
+    }
     else {
       stats.matchedRows += 1;
       if (!match.code) addRowError(`PURE 9 regel ${rowNumber}: de gematchte werksoort heeft geen Code.`);
@@ -243,6 +276,14 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     ]);
   }
 
+  if (missingGuidRows.size) {
+    const missingRows = [...missingGuidRows.values()].reduce((total, item) => total + item.count, 0);
+    errors.unshift(`${missingRows.toLocaleString("nl-NL")} planningsregels verwijzen naar ${missingGuidRows.size.toLocaleString("nl-NL")} GUID(s) die niet in de GetConnector staan.`);
+    for (const item of [...missingGuidRows.values()].sort((a, b) => b.count - a.count)) {
+      addRowError(`${item.displayGuid}: ${item.count.toLocaleString("nl-NL")} regel(s), vanaf PURE 9-regel ${item.firstRow}.`);
+    }
+  }
+
   if (hiddenIssueCount) errors.push(`Daarnaast zijn nog ${hiddenIssueCount} fouten niet getoond.`);
   if (stats.blankEmployees) warnings.push(`${stats.blankEmployees.toLocaleString("nl-NL")} regels hebben bewust geen medewerker.`);
   if (stats.dailyRows) warnings.push(`${stats.dailyRows.toLocaleString("nl-NL")} dagregels worden met Periodetype 0 overgenomen.`);
@@ -280,6 +321,29 @@ function isMondayDate(value: Cell): boolean {
   if (!formatted) return false;
   const [day, month, year] = formatted.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 1;
+}
+
+function dateSerial(value: Cell): number | null {
+  const formatted = formatDate(value);
+  if (!formatted) return null;
+  const [day, month, year] = formatted.split("-").map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
+function parseIsoDate(value: string): number | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() + 1 !== month || date.getUTCDate() !== day) return null;
+  return Math.floor(date.valueOf() / 86_400_000);
+}
+
+function formatIsoForDutch(value: string): string {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : value;
 }
 
 function matrixToTable(fileName: string, matrix: Cell[][]): ParsedTable {

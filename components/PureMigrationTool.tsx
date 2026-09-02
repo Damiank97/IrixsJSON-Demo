@@ -11,6 +11,14 @@ import {
 
 const EMPTY_RESULT: MigrationResult | null = null;
 
+function todayIso() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function PureMigrationTool() {
   const [source, setSource] = useState<ParsedTable | null>(null);
   const [lookup, setLookup] = useState<ParsedTable | null>(null);
@@ -18,6 +26,7 @@ export function PureMigrationTool() {
   const [lookupError, setLookupError] = useState("");
   const [result, setResult] = useState<MigrationResult | null>(EMPTY_RESULT);
   const [busy, setBusy] = useState(false);
+  const [migrationStartDate, setMigrationStartDate] = useState(todayIso);
   const [includeImportDefinition, setIncludeImportDefinition] = useState(false);
 
   const canConvert = Boolean(source && lookup && !busy);
@@ -45,7 +54,7 @@ export function PureMigrationTool() {
     if (!source || !lookup) return;
     setBusy(true);
     window.setTimeout(() => {
-      setResult(migratePure9ToPure10(source, lookup));
+      setResult(migratePure9ToPure10(source, lookup, migrationStartDate));
       setBusy(false);
     }, 30);
   }
@@ -143,15 +152,30 @@ export function PureMigrationTool() {
             <p className="font-mono text-xs text-accent">03 · Converteren</p>
             <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">{status}</p>
           </div>
-          <button
-            type="button"
-            disabled={!canConvert}
-            onClick={convert}
-            className="tool-button-primary"
-          >
-            {busy ? "Controleren…" : "Controleer en converteer"}
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="text-xs font-semibold text-muted">
+              Planning meenemen vanaf
+              <input
+                type="date"
+                value={migrationStartDate}
+                onChange={(event) => {
+                  setMigrationStartDate(event.target.value);
+                  setResult(null);
+                }}
+                className="mt-2 block min-h-12 rounded-xl border border-rule bg-paper px-4 py-2 text-sm font-semibold text-ink outline-none focus:border-accent"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!canConvert || !migrationStartDate}
+              onClick={convert}
+              className="tool-button-primary"
+            >
+              {busy ? "Controleren…" : "Controleer en converteer"}
+            </button>
+          </div>
         </div>
+        <p className="mt-4 text-xs text-muted">Oudere dagregels worden overgeslagen. Bij weekplanning blijft de lopende week behouden.</p>
       </section>
 
       {result && (
@@ -225,6 +249,11 @@ function ResultPanel({ result, onDownload, includeImportDefinition, onIncludeImp
     return (
       <section className="rounded-2xl border border-method-delete/30 bg-danger-soft p-6">
         <h2 className="text-2xl font-semibold text-method-delete">Nog niet importeren</h2>
+        {result.warnings.length > 0 && (
+          <div className="mt-4 border-l-2 border-method-put pl-4 text-sm text-muted">
+            {result.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+          </div>
+        )}
         <ul className="mt-4 space-y-2 text-sm text-method-delete">
           {result.errors.map((error, index) => <li key={`${index}-${error}`}>— {error}</li>)}
         </ul>
