@@ -92,7 +92,7 @@ export function PureMigrationTool() {
             <p className="font-mono text-xs text-accent">01</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Bronbestanden voorbereiden</h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
-              Maak in PURE 9 op het gebruikte vrije bestand een weergave aan met de naam <strong>PURE - Export</strong>.
+              Maak in AFAS in het vrije bestand van PURE 9 een weergave aan met de naam <strong>PURE - Export</strong>.
               Selecteer vervolgens alle beschikbare velden één voor één van boven naar beneden.
             </p>
             <p className="mt-4 border-l-2 border-accent pl-4 text-sm leading-relaxed text-muted">

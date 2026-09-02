@@ -118,9 +118,20 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
   if (!freeFileHeader) {
     errors.push("Het PURE 9-bestand mist de kolom 'Vrij bestand 1' t/m 'Vrij bestand 10'.");
   }
+  const sourceValue = (row: TableRow, field: Pure9Field) => {
+    const header = sourceColumns[field];
+    return header ? row[header] : undefined;
+  };
+  const planningRows = source.rows
+    .map((row, index) => ({ row, rowNumber: index + 2 }))
+    .filter(({ row }) => parseNumber(sourceValue(row, "DataType")) === 2);
+  const ignoredSourceRows = source.rows.length - planningRows.length;
+  const inferBlankPeriodsAsWeekly = planningRows.length > 0 && planningRows.every(({ row }) =>
+    parseNumber(sourceValue(row, "PeriodType")) === null && isMondayDate(sourceValue(row, "Datum")),
+  );
 
   const stats: MigrationStats = {
-    sourceRows: source.rows.length,
+    sourceRows: planningRows.length,
     convertedRows: 0,
     matchedRows: 0,
     weeklyRows: 0,
@@ -133,8 +144,15 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
 
   if (errors.length) return { csv: null, errors, warnings, stats, preview: [] };
   if (!source.rows.length) errors.push("Het PURE 9-bestand bevat geen gegevensregels.");
+  else if (!planningRows.length) errors.push("Het PURE 9-bestand bevat geen planningsregels met DataType 2.");
   if (!lookup.rows.length) errors.push("De GetConnector bevat geen voorcalculatieregels.");
   if (errors.length) return { csv: null, errors, warnings, stats, preview: [] };
+  if (ignoredSourceRows) {
+    warnings.push(`${ignoredSourceRows.toLocaleString("nl-NL")} overige regels uit het vrije bestand zijn genegeerd.`);
+  }
+  if (inferBlankPeriodsAsWeekly) {
+    warnings.push("PeriodType is leeg; omdat alle planningsdatums op maandag vallen, zijn de regels als weekplanning verwerkt.");
+  }
 
   const byGuid = new Map<string, { code: string; type: string }>();
   const duplicateLookupGuids = new Set<string>();
@@ -162,20 +180,13 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     if (errors.length < issueLimit) errors.push(message);
     else hiddenIssueCount += 1;
   };
-  const sourceValue = (row: TableRow, field: Pure9Field) => {
-    const header = sourceColumns[field];
-    return header ? row[header] : undefined;
-  };
-
-  for (const [index, row] of source.rows.entries()) {
-    const rowNumber = index + 2;
+  for (const { row, rowNumber } of planningRows) {
     const budgetGuid = normalizeGuid(sourceValue(row, "BudgetLineGuid"));
     const eventGuid = normalizeGuid(sourceValue(row, "PureGuid"));
     const match = byGuid.get(budgetGuid);
     const amount = parseNumber(sourceValue(row, "HourAmount"));
     const date = formatDate(sourceValue(row, "Datum"));
-    const dataType = parseNumber(sourceValue(row, "DataType"));
-    const periodType = parseNumber(sourceValue(row, "PeriodType"));
+    const periodType = parseNumber(sourceValue(row, "PeriodType")) ?? (inferBlankPeriodsAsWeekly ? 1 : null);
     const employee = textValue(sourceValue(row, "EmployeeProfitCode"));
     const description = textValue(sourceValue(row, "Remarks"));
 
@@ -193,7 +204,6 @@ export function migratePure9ToPure10(source: ParsedTable, lookup: ParsedTable): 
     else seenEvents.add(eventGuid);
     if (amount === null || amount < 0) addRowError(`PURE 9 regel ${rowNumber}: ongeldig aantal uren.`);
     if (!date) addRowError(`PURE 9 regel ${rowNumber}: ongeldige datum.`);
-    if (dataType !== 2) addRowError(`PURE 9 regel ${rowNumber}: DataType ${textValue(sourceValue(row, "DataType"))} wordt niet ondersteund.`);
     if (periodType !== 0 && periodType !== 1) addRowError(`PURE 9 regel ${rowNumber}: PeriodType is niet 0 of 1.`);
     if (description.length > 50) addRowError(`PURE 9 regel ${rowNumber}: Omschrijving is langer dan 50 tekens.`);
 
@@ -263,6 +273,13 @@ function findFreeFileHeader(headers: string[]): string | undefined {
   return headers.find((header) =>
     /^vrij bestand 0?(?:[1-9]|10)$/i.test(header.trim()) || header.trim().toLowerCase() === "omschrijving",
   );
+}
+
+function isMondayDate(value: Cell): boolean {
+  const formatted = formatDate(value);
+  if (!formatted) return false;
+  const [day, month, year] = formatted.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 1;
 }
 
 function matrixToTable(fileName: string, matrix: Cell[][]): ParsedTable {
