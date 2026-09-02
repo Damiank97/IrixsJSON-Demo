@@ -96,6 +96,16 @@ export function PureMigrationTool() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-brand-yellow/70 bg-[#FFF7E3] p-5 text-ink shadow-sm md:p-6" role="note" aria-label="Belangrijk voor datums">
+        <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-accent">Belangrijk vóór export en import</p>
+        <h2 className="mt-2 text-xl font-semibold tracking-tight">Zet ‘Datum gebruiken’ aan in het vrije bestand</h2>
+        <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted">
+          Controleer dit in AFAS voordat je de planning exporteert. Bij het importeren in PURE 10 moet het veld
+          <strong className="text-ink"> Datum</strong> in de importdefinitie bovendien op <strong className="text-ink">Inlezen</strong> staan.
+          Zonder deze twee instellingen worden planningsregels zonder datum aangemaakt en zijn ze niet zichtbaar in de planning.
+        </p>
+      </section>
+
       <section className="tool-card p-6 md:p-8">
         <div className="grid gap-8 md:grid-cols-[0.8fr_1.2fr]">
           <div>
@@ -103,7 +113,7 @@ export function PureMigrationTool() {
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Bronbestanden voorbereiden</h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
               Maak in AFAS in het vrije bestand van PURE 9 een weergave aan met de naam <strong>PURE - Export</strong>.
-              Selecteer vervolgens alle beschikbare velden één voor één van boven naar beneden.
+              Zet eerst <strong>Datum gebruiken</strong> aan en selecteer vervolgens alle beschikbare velden één voor één van boven naar beneden.
             </p>
             <p className="mt-4 border-l-2 border-accent pl-4 text-sm leading-relaxed text-muted">
               Heeft een veld een uitklappijltje? Selecteer dan alleen het bovenliggende veld. Je hoeft het veld niet
