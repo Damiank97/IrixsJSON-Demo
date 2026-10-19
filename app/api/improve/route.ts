@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
  * }
  *
  * Stuurt naar Groq een prompt om realistische test-data te vullen.
- * Returns: { improved: unknown }
+ * Returns: { improved: unknown, notes: string[] }
  */
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GROQ_API_KEY;
@@ -45,17 +45,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const systemPrompt = `Je bent een expert in AFAS Profit UpdateConnectors. Je krijgt een JSON-schema en een minimale payload als startpunt. Je vervangt dummy-waarden door realistische test-data zodat de payload een geldige AFAS-call wordt.
+  const systemPrompt = `Je bent een expert in AFAS Profit UpdateConnectors. Je krijgt een officieel AFAS JSON-schema en een payload als startpunt. Verbeter alleen de waarden zodat de payload bruikbare, realistische testdata bevat.
 
 Belangrijke regels:
-- Behoud de exacte structuur van het JSON-object — geen velden toevoegen of weggooien tenzij voor een geldige call écht nodig
-- Vul lege strings ("") met realistische codes (bv. JoCo dagboekcode, AcNr grootboeknummer)
-- Zorg dat AmDe en AmCr opgeteld kloppen per boeking (de balans van debet/credit)
+- Behoud exact dezelfde objectstructuur en dezelfde veldnamen; verzin nooit AFAS-velden
+- Respecteer type, enum, maxLength en format uit het schema strikt
+- Laat bestaande primaire sleutels en door de gebruiker ingevulde waarden staan
+- Vul alleen duidelijke dummywaarden en lege verplichte velden slimmer in
+- Zorg alleen bij financiële boekingen met meerdere regels dat debet en credit in balans zijn
 - Voor financiële boekingen (Fi*): geef realistische bedragen (€100-€10.000), geldige datums (huidige periode), en een logische BpNr/InId
 - Voor stamdata (Kn*): Nederlandse namen, geldige IBAN, geldige BSN met 11-proef, NL-adressen
-- Voor verwijzingsvelden naar tabellen: gebruik plausibele codes ("1", "VRK", etc.)
+- Omgevingsafhankelijke codes (medewerker, project, dagboek, grootboek, typecode) mogen plausibel zijn maar moeten in AFAS worden gecontroleerd
 - Geen Lorem Ipsum, geen "test1234" placeholders — geef écht-lijkende data
-- Antwoord ALLEEN met de verbeterde JSON, geen uitleg, geen markdown code blocks`;
+- Antwoord als JSON-object met exact twee keys: "improved" (de verbeterde payload) en "notes" (maximaal 3 korte Nederlandse controlepunten)`;
 
   const userPrompt = `Connector: ${connectorId} (${method})
 
@@ -65,7 +67,11 @@ ${JSON.stringify(currentPayload, null, 2)}
 Relevant deel van het schema (alleen properties + required + descriptions):
 ${JSON.stringify(extractSchemaSummary(schema), null, 2)}
 
-Geef de verbeterde payload terug als JSON-object.`;
+Geef één JSON-object terug in deze vorm:
+{
+  "improved": <de verbeterde payload met exact dezelfde structuur>,
+  "notes": ["maximaal drie korte controlepunten"]
+}`;
 
   let groqResponse: Response;
   try {
@@ -78,14 +84,14 @@ Geef de verbeterde payload terug als JSON-object.`;
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "qwen/qwen3.8-27b",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
           response_format: { type: "json_object" },
           temperature: 0.3,
-          max_tokens: 4000,
+          max_completion_tokens: 5000,
         }),
         // Vercel timeout safety
         signal: AbortSignal.timeout(30_000),
@@ -112,9 +118,9 @@ Geef de verbeterde payload terug als JSON-object.`;
     return NextResponse.json({ error: "Lege response van Groq" }, { status: 502 });
   }
 
-  let improved: unknown;
+  let parsed: { improved?: unknown; notes?: unknown };
   try {
-    improved = JSON.parse(content);
+    parsed = JSON.parse(content);
   } catch (err) {
     return NextResponse.json(
       {
@@ -125,7 +131,15 @@ Geef de verbeterde payload terug als JSON-object.`;
     );
   }
 
-  return NextResponse.json({ improved });
+  if (!("improved" in parsed)) {
+    return NextResponse.json({ error: "Slimme controle gaf geen verbeterde payload terug" }, { status: 502 });
+  }
+
+  return NextResponse.json({
+    improved: parsed.improved,
+    notes: Array.isArray(parsed.notes) ? parsed.notes.map(String).slice(0, 3) : [],
+    model: "qwen/qwen3.8-27b",
+  });
 }
 
 /**

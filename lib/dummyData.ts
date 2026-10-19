@@ -93,6 +93,11 @@ export function dummyForField(
   const lower = fieldName.toLowerCase();
   const desc = description.toLowerCase();
 
+  // Een officiële keuzelijst uit het schema wint altijd van onze heuristiek.
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    return schema.enum[(index - 1) % schema.enum.length];
+  }
+
   // Specifieke AFAS-veldnamen — exact match
   switch (fieldName) {
     // === Financieel — kop ===
@@ -103,7 +108,7 @@ export function dummyForField(
     case "UnId":
       return 1;
     case "JoCo":
-      return "";  // dagboekcode is project-specifiek; gebruiker moet invullen
+      return "VRK"; // plausibel; de controle meldt dat omgevingscodes nagekeken moeten worden
     case "AuNu":
       return true;
     case "PrTp":
@@ -151,8 +156,10 @@ export function dummyForField(
       return 1;
 
     // === Stamdata personen ===
-    case "BcCo": case "BSN":
+    case "BSN":
       return generateBSN(index);
+    case "BcCo":
+      return "ORG" + String(1000 + index);
     case "EmAd":
       return `testpersoon${index}@irixs.test`;
     case "TeNr": case "TeN2": case "MbNr":
@@ -216,15 +223,29 @@ export function dummyForField(
   }
 
   // Op basis van type/format
+  if (schema.format === "uuid") {
+    return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+  }
+  if (schema.format === "byte") {
+    return btoa(`Irixs testbestand ${index}`);
+  }
+  if (schema.format === "email") {
+    return `testpersoon${index}@irixs.test`;
+  }
+  if (schema.format === "uri") {
+    return `https://example.test/afas/${index}`;
+  }
+  if (schema.format === "duration") {
+    return "PT1H";
+  }
+  if (schema.format === "password") {
+    return `Demo-${1000 + index}`;
+  }
   if (schema.format === "date" || lower.startsWith("da")) {
     return isoDate(-index);
   }
   if (schema.format === "date-time" || lower.includes("dttime")) {
     return isoDateTime(-index);
-  }
-
-  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
-    return schema.enum[index % schema.enum.length];
   }
 
   switch (schema.type) {

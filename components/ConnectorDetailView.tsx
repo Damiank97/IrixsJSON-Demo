@@ -8,10 +8,12 @@ import { GeneratorPanel } from "./GeneratorPanel";
 type View =
   | { kind: "generator" }
   | { kind: "example"; index: number }
+  | { kind: "response"; index: number }
   | { kind: "schema"; index: number };
 
 export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
   const { connector, schemas, examples } = detail;
+  const responses = detail.responses ?? [];
   const [llmCopied, setLlmCopied] = useState(false);
 
   const [view, setView] = useState<View>(() =>
@@ -20,9 +22,10 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
 
   const activeContent = useMemo(() => {
     if (view.kind === "example") return examples[view.index]?.payload;
+    if (view.kind === "response") return responses[view.index]?.payload;
     if (view.kind === "schema") return schemas[view.index]?.schema;
     return null;
-  }, [view, examples, schemas]);
+  }, [view, examples, responses, schemas]);
 
   async function copyForLlm() {
     const prompt = buildLlmPrompt(detail);
@@ -50,6 +53,14 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
                 <span className="text-white/60">Geen omschrijving beschikbaar.</span>
               )}
             </p>
+            <div className="mb-5 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-white/70">
+              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">Officiële AFAS-bron · {connector.source_version ?? "actueel"}</span>
+              {connector.documentation_url && (
+                <a href={connector.documentation_url} target="_blank" rel="noreferrer" className="rounded-full border border-white/20 px-3 py-1.5 transition hover:bg-white/10 hover:text-white">
+                  Functionele uitleg ↗
+                </a>
+              )}
+            </div>
 
             {/* LLM-export knop */}
             <button
@@ -61,7 +72,7 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
             </button>
           </div>
 
-          <dl className="relative z-10 mt-8 grid grid-cols-3 gap-2 md:mt-0 md:w-1/3 md:self-end">
+          <dl className="relative z-10 mt-8 grid grid-cols-2 gap-2 md:mt-0 md:w-1/3 md:self-end">
             <Field label="Methodes">
               <div className="mt-1 flex justify-center gap-1">
                 {connector.methods.map((m) => (
@@ -73,6 +84,7 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
             </Field>
             <Field label="Schema's">{schemas.length}</Field>
             <Field label="Voorbeelden">{examples.length}</Field>
+            <Field label="Responses">{responses.length}</Field>
           </dl>
       </section>
 
@@ -150,6 +162,26 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
                 </ul>
               </>
             )}
+
+            {responses.length > 0 && (
+              <>
+                <p className="mt-8 text-xs uppercase tracking-[0.2em] text-muted mb-3">
+                  Antwoorden
+                </p>
+                <ul className="space-y-1">
+                  {responses.map((response, i) => (
+                    <li key={`${response.method}-${response.status}-${i}`}>
+                      <NavItem
+                        active={view.kind === "response" && view.index === i}
+                        onClick={() => setView({ kind: "response", index: i })}
+                      >
+                        <span className="font-mono text-xs">{response.method} · HTTP {response.status}</span>
+                      </NavItem>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </nav>
 
           <div className="tool-card col-span-12 p-5 md:col-span-9 md:p-7">
@@ -158,7 +190,7 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
             ) : activeContent !== undefined && activeContent !== null ? (
               <JsonViewer
                 data={activeContent}
-                label={view.kind === "example" ? "Voorbeeld-payload" : "JSON Schema"}
+                label={view.kind === "example" ? "Voorbeeld-payload" : view.kind === "response" ? "Voorbeeld-response" : "JSON Schema"}
               />
             ) : (
               <p className="text-muted font-display italic text-xl py-16 text-center">

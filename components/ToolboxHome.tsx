@@ -150,6 +150,9 @@ function SchemaBank({ connectors, totalSchemas, totalExamples }: {
           <p className="tool-kicker">AFAS UpdateConnectors</p>
           <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-[-0.035em] text-white md:text-5xl">JSON Schemabank</h1>
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/80 md:text-base">Vind een connectorstructuur en pak direct een bruikbaar voorbeeld voor je koppeling of test.</p>
+          <p className="mt-4 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-white/75">
+            Rechtstreeks uit AFASSoftware/OASContent · versie {connectors[0]?.source_version ?? "actueel"}
+          </p>
         </div>
         <dl className="relative z-10 mt-7 grid grid-cols-3 gap-2 md:mt-0">
           <Stat label="Connectors" value={connectors.length} />

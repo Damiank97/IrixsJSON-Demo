@@ -9,6 +9,9 @@ export type ConnectorIndexItem = {
   methods: string[];
   schema_count: number;
   example_count: number;
+  response_count?: number;
+  source_version?: string;
+  documentation_url?: string;
 };
 
 export type ConnectorSchema = {
@@ -26,12 +29,22 @@ export type ConnectorExample = {
   method_hint: string;
   relative_path: string;
   payload: unknown;
+  official?: boolean;
+};
+
+export type ConnectorResponse = {
+  method: "POST" | "PUT" | "DELETE";
+  status: string;
+  description: string;
+  name: string;
+  payload: unknown;
 };
 
 export type ConnectorDetail = {
   connector: ConnectorIndexItem & { description: string };
   schemas: ConnectorSchema[];
   examples: ConnectorExample[];
+  responses?: ConnectorResponse[];
 };
 
 const DATA_DIR = path.join(process.cwd(), "data");

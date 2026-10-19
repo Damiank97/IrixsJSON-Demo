@@ -51,7 +51,34 @@ export function generatePayload(
     );
   }
 
-  return count === 1 ? records[0] : records;
+  return count === 1 ? records[0] : combineAsAfasBatch(records);
+}
+
+/**
+ * AFAS verwacht bij meerdere hoofdrecords geen array rond de volledige request,
+ * maar één connector-object met `Element: [...]`.
+ */
+function combineAsAfasBatch(records: unknown[]): unknown {
+  const first = records[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) return records;
+  const rootKeys = Object.keys(first);
+  if (rootKeys.length !== 1) return records;
+  const rootKey = rootKeys[0];
+  const firstConnector = (first as Record<string, unknown>)[rootKey];
+  if (!firstConnector || typeof firstConnector !== "object" || Array.isArray(firstConnector)) return records;
+  const elements = records.map((record) => {
+    if (!record || typeof record !== "object" || Array.isArray(record)) return undefined;
+    const connector = (record as Record<string, unknown>)[rootKey];
+    if (!connector || typeof connector !== "object" || Array.isArray(connector)) return undefined;
+    return (connector as Record<string, unknown>).Element;
+  });
+  if (elements.some((element) => element === undefined)) return records;
+  return {
+    [rootKey]: {
+      ...(firstConnector as Record<string, unknown>),
+      Element: elements,
+    },
+  };
 }
 
 function mergeOverrides(

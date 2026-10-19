@@ -96,8 +96,9 @@ export function ConnectorBrowser({ connectors }: { connectors: ConnectorIndexIte
                       <MethodBadge key={m} method={m} />
                     ))}
                   </div>
-                  <div className="col-span-6 md:col-span-1 text-right text-xs font-mono tabular-nums text-muted">
+                  <div className="col-span-6 md:col-span-1 text-right text-xs font-mono tabular-nums text-muted" title="Officiële voorbeelden / responses">
                     {c.example_count > 0 ? `${c.example_count}×` : "—"}
+                    {(c.response_count ?? 0) > 0 && <span className="ml-1 text-emerald-700">+{c.response_count}</span>}
                   </div>
                 </div>
                 <div className="mt-1 text-xs uppercase tracking-[0.15em] text-muted/70 font-sans">

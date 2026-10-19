@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "next start"
+    "start": "next start",
+    "sync:afas": "node scripts/sync-afas-oas.mjs"
   },
   "dependencies": {
     "next": "^16.2.4",

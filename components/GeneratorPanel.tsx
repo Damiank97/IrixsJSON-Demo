@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { generatePayload, parseCsv, findOptionalEntities } from "@/lib/generator";
 import type { ConnectorSchema } from "@/lib/data";
+import { countEnvironmentCodes, validatePayload } from "@/lib/schemaValidation";
 
 type Props = {
   schemas: ConnectorSchema[];
@@ -26,8 +27,18 @@ export function GeneratorPanel({ schemas }: Props) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiUsed, setAiUsed] = useState(false);
+  const [smartNotes, setSmartNotes] = useState<string[]>([]);
 
   const activeSchema = availableSchemas[schemaIndex];
+
+  const validationIssues = useMemo(
+    () => (output === null || !activeSchema ? [] : validatePayload(activeSchema.schema, output)),
+    [activeSchema, output]
+  );
+  const environmentCodeCount = useMemo(
+    () => (output === null || !activeSchema ? 0 : countEnvironmentCodes(activeSchema.schema, output)),
+    [activeSchema, output]
+  );
 
   // Velden uit het actieve schema halen — voor de hint-lijst
   const requiredFields = useMemo(
@@ -118,6 +129,7 @@ export function GeneratorPanel({ schemas }: Props) {
     setOutput(result);
     setAiUsed(false);
     setAiError(null);
+    setSmartNotes([]);
   }
 
   async function handleImproveWithAi() {
@@ -142,6 +154,7 @@ export function GeneratorPanel({ schemas }: Props) {
       }
       setOutput(data.improved);
       setAiUsed(true);
+      setSmartNotes(Array.isArray(data.notes) ? data.notes : []);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Onbekende fout");
     } finally {
@@ -244,7 +257,7 @@ export function GeneratorPanel({ schemas }: Props) {
             <span className="text-xs text-muted">
               {count === 1
                 ? "→ enkel object"
-                : `→ array van ${count} payloads`}
+                : `→ één AFAS-request met ${count} Element-records`}
             </span>
           </div>
         </div>
@@ -376,13 +389,13 @@ export function GeneratorPanel({ schemas }: Props) {
 
       {/* Output */}
       {output !== null && (
-        <div className="border border-rule bg-paper">
+        <div className="overflow-hidden rounded-2xl border border-rule bg-paper">
           <div className="flex justify-between items-center px-4 py-3 border-b border-rule flex-wrap gap-2">
             <span className="text-xs uppercase tracking-[0.2em] text-muted flex items-center gap-3">
               Gegenereerd
               {aiUsed && (
                 <span className="text-[10px] tracking-widest text-accent border border-accent/40 px-1.5 py-0.5">
-                  ✦ AI verrijkt
+                  ✦ Slim verbeterd
                 </span>
               )}
             </span>
@@ -392,7 +405,7 @@ export function GeneratorPanel({ schemas }: Props) {
                 disabled={aiLoading}
                 className="text-xs font-mono px-3 py-1.5 border border-accent/50 text-accent hover:bg-accent hover:text-canvas hover:border-accent transition-colors disabled:opacity-50 disabled:cursor-wait"
               >
-                {aiLoading ? "Bezig…" : "✦ Verbeter met AI"}
+                {aiLoading ? "Slimme controle…" : "✦ Slim verbeteren"}
               </button>
               <button
                 onClick={handleCopy}
@@ -411,6 +424,31 @@ export function GeneratorPanel({ schemas }: Props) {
           {aiError && (
             <div className="px-4 py-2 border-b border-rule bg-method-delete/5 text-xs text-method-delete">
               {aiError}
+            </div>
+          )}
+          <div className={`grid gap-3 border-b border-rule px-4 py-3 text-xs md:grid-cols-3 ${validationIssues.length ? "bg-method-delete/5" : "bg-emerald-50"}`}>
+            <div>
+              <span className="block font-semibold text-ink">
+                {validationIssues.length === 0 ? "✓ Schema-check geslaagd" : `${validationIssues.length} schemafout${validationIssues.length === 1 ? "" : "en"}`}
+              </span>
+              <span className="text-muted">Types, verplichte velden, lengtes en vaste waarden</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-ink">{count} record{count === 1 ? "" : "s"}</span>
+              <span className="text-muted">Klaar om te kopiëren of downloaden</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-ink">{environmentCodeCount} AFAS-code{environmentCodeCount === 1 ? "" : "s"} controleren</span>
+              <span className="text-muted">Zoals medewerker, project, dagboek of typecode</span>
+            </div>
+          </div>
+          {(validationIssues.length > 0 || smartNotes.length > 0) && (
+            <div className="border-b border-rule px-4 py-3 text-xs leading-relaxed">
+              {validationIssues.slice(0, 8).map((issue) => (
+                <p key={`${issue.path}-${issue.message}`} className="text-method-delete">— <span className="font-mono">{issue.path}</span>: {issue.message}</p>
+              ))}
+              {validationIssues.length > 8 && <p className="text-method-delete">— Nog {validationIssues.length - 8} fouten niet getoond.</p>}
+              {smartNotes.map((note) => <p key={note} className="text-muted">— {note}</p>)}
             </div>
           )}
           <pre className="json-viewer text-xs leading-relaxed p-6 overflow-auto max-h-[60vh] font-mono text-ink">
