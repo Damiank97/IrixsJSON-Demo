@@ -237,7 +237,7 @@ export function DeclarationBatchPoc() {
     document.getElementById("declaration-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  function cancelEdit() { setEditingId(null); setDraft(EMPTY_LINE); setReceiptResult(null); setReceiptError(""); }
+  function cancelEdit() { setEditingId(null); setDraft(EMPTY_LINE); setReceiptResult(null); setReceiptError(""); setNotice("Wijziging geannuleerd. De opgeslagen regel is behouden."); }
 
   async function importValidity(file: File) {
     setImporting(true);
@@ -312,8 +312,8 @@ export function DeclarationBatchPoc() {
 
   function removeLine(id: string) {
     persist({ ...batch, concept: true, submitted: false, lines: batch.lines.filter((line) => line.id !== id) });
-    setNotice("Regel verwijderd uit het concept.");
     if (id === editingId) cancelEdit();
+    setNotice("Regel verwijderd uit het concept.");
   }
 
   function resetDemo() {
