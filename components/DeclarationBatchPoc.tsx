@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MileageEditor, type MileageValues } from "@/components/MileageEditor";
+import { matchesCombination, parseCombinations, validDate, type ValidityCombination } from "@/lib/declarationRules";
 
 type LineKind = "kilometers" | "kosten";
 
-type DeclarationLine = {
+type DeclarationLine = MileageValues & {
   id: string;
   date: string;
   kind: LineKind;
@@ -31,7 +33,7 @@ type Batch = {
 };
 
 type Preview = "flow" | "storage" | "posts";
-type LookupOption = { code: string; label: string };
+type LookupOption = { code: string; label: string; kind?: LineKind };
 type ReceiptResult = { description: string; amount: number | null; date: string | null; merchant: string | null; confidence: "laag" | "middel" | "hoog" };
 
 const STORAGE_KEY = "irixs-declaration-poc-v1";
@@ -113,6 +115,13 @@ export function DeclarationBatchPoc() {
   const [receiptReading, setReceiptReading] = useState(false);
   const [receiptResult, setReceiptResult] = useState<ReceiptResult | null>(null);
   const [receiptError, setReceiptError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [combinations, setCombinations] = useState<ValidityCombination[]>([]);
+  const [validitySource, setValiditySource] = useState<"laden" | "demo" | "afas" | "bestand" | "error">("laden");
+  const [lookupError, setLookupError] = useState("");
+  const [validityError, setValidityError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [distanceReading, setDistanceReading] = useState(false);
 
   useEffect(() => {
     try {
@@ -132,12 +141,18 @@ export function DeclarationBatchPoc() {
       fetch("/api/afas/lookups?type=declarationTypes").then((response) => response.json()),
     ]).then(([projectData, typeData]) => {
       if (!active) return;
+      if (projectData.error || typeData.error) throw new Error(projectData.error || typeData.error);
       setProjects(projectData.options ?? []);
       setDeclarationTypes(typeData.options ?? []);
       setLookupSource(projectData.source === "afas" && typeData.source === "afas" ? "afas" : "demo");
-    }).catch(() => {
-      if (active) setLookupSource("demo");
+    }).catch((error) => {
+      if (active) { setLookupSource("demo"); setLookupError(error instanceof Error ? error.message : "Lookups konden niet worden geladen."); }
     });
+    fetch("/api/afas/lookups?type=validityCombinations").then((response) => response.json()).then((data) => {
+      if (!active) return;
+      if (data.error) throw new Error(data.error);
+      setCombinations(data.combinations ?? []); setValiditySource(data.source);
+    }).catch((error) => { if (active) { setValiditySource("error"); setValidityError(error instanceof Error ? error.message : "Geldigheidscombinaties laden mislukt."); } });
     return () => { active = false; };
   }, []);
 
@@ -151,6 +166,27 @@ export function DeclarationBatchPoc() {
   );
   const storagePayload = useMemo(() => buildFreeFilePayload(batch), [batch]);
   const postPayloads = useMemo(() => batch.lines.map((line) => buildDeclarationPayload(batch, line)), [batch]);
+  const rulesReady = !lookupError && !validityError && validitySource !== "laden" && lookupSource !== "laden";
+  const allowedTypes = declarationTypes.filter((option) => combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, option.code)));
+  const allowedProjects = projects.filter((option) => combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, draft.declarationType, option.code)));
+  const draftValid = rulesReady && combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, draft.declarationType, draft.project));
+  const invalidLines = batch.lines.filter((line) => Boolean(lineError(line)));
+
+  function lineError(line: Omit<DeclarationLine, "id">): string {
+    if (!rulesReady) return "Wacht op de lookups en geldigheidscombinaties of herstel de koppeling.";
+    if (!validDate(line.date)) return "Kies een geldige datum.";
+    if (line.date.slice(0, 7) !== batch.period) return "De datum moet binnen de maand van het concept vallen.";
+    if (!line.description.trim() || line.description.length > 255) return "Vul een omschrijving in van maximaal 255 tekens.";
+    if (!declarationTypes.some((option) => option.code === line.declarationType)) return "Kies een bestaande declaratiesoort.";
+    const typeKind = declarationTypes.find((option) => option.code === line.declarationType)?.kind;
+    if (typeKind && typeKind !== line.kind) return "Het invoertype past niet bij deze declaratiesoort.";
+    if (line.project && !projects.some((option) => option.code === line.project)) return "Kies een bestaand project.";
+    if (!combinations.some((rule) => matchesCombination(rule, batch.employeeId, line.date, line.declarationType, line.project))) return "Geen geldige combinatie voor deze medewerker, datum, declaratiesoort en project.";
+    const value = line.kind === "kilometers" ? line.kilometers : line.amount;
+    if (!Number.isFinite(value) || value <= 0) return "Vul een positief bedrag of aantal kilometers in.";
+    if (line.kind === "kilometers" && (!line.from.trim() || !line.to.trim() || line.from.length > 255 || line.to.length > 255)) return "Vul twee adressen in (maximaal 255 tekens).";
+    return "";
+  }
 
   function persist(next: Batch) {
     setBatch(next);
@@ -171,26 +207,68 @@ export function DeclarationBatchPoc() {
 
   function submitBatch() {
     if (!batch.lines.length) return;
+    if (editingId) { setNotice("Sla eerst de regelwijziging op of annuleer deze."); return; }
+    if (!rulesReady || invalidLines.length) { setNotice(`Controleer de regels vóór indienen. ${invalidLines.length} regel(s) voldoen nog niet.`); return; }
     const now = new Date().toISOString();
     const next = { ...batch, concept: false, submitted: true, savedAt: now, submittedAt: now };
     persist(next);
-    setNotice(`${next.lines.length} declaraties zijn in één handeling ingediend.`);
+    setNotice(`Demo: ${next.lines.length} declaraties zijn als ingediend gemarkeerd. Er zijn geen berichten naar AFAS verstuurd.`);
   }
 
   function addLine() {
-    if (!draft.description.trim() || !draft.date) {
-      setNotice("Vul minimaal een datum en omschrijving in.");
-      return;
-    }
+    const error = lineError(draft);
+    if (error) { setNotice(error); return; }
     const nextLine: DeclarationLine = {
       ...draft,
-      id: `R${String(batch.lines.length + 1).padStart(3, "0")}`,
+      id: editingId ?? crypto.randomUUID(),
     };
-    persist({ ...batch, concept: true, submitted: false, lines: [...batch.lines, nextLine] });
-    setDraft({ ...EMPTY_LINE, date: draft.date });
+    persist({ ...batch, concept: true, submitted: false, lines: editingId ? batch.lines.map((line) => line.id === editingId ? nextLine : line) : [...batch.lines, nextLine] });
+    setDraft({ ...EMPTY_LINE, date: draft.date, declarationType: draft.declarationType, project: draft.project, kind: draft.kind });
+    setEditingId(null);
     setReceiptResult(null);
     setReceiptError("");
-    setNotice("Regel toegevoegd aan het maandconcept.");
+    setNotice(editingId ? "Regelwijziging opgeslagen in het concept." : "Regel toegevoegd aan het maandconcept.");
+  }
+
+  function editLine(line: DeclarationLine) {
+    if (batch.submitted) return;
+    setDraft({ ...line }); setEditingId(line.id); setReceiptError(""); setReceiptResult(null);
+    setNotice("Je wijzigt een bestaande conceptregel. Sla je wijziging hieronder op.");
+    document.getElementById("declaration-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function cancelEdit() { setEditingId(null); setDraft(EMPTY_LINE); setReceiptResult(null); setReceiptError(""); }
+
+  async function importValidity(file: File) {
+    setImporting(true);
+    try {
+      const rows = await readImportRows(file);
+      const imported = parseCombinations(rows);
+      setCombinations(imported); setValiditySource("bestand"); setValidityError("");
+      setNotice(`${imported.length} uitgewerkte geldigheidscombinaties geladen. Alle conceptregels worden opnieuw gecontroleerd.`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Bestand kon niet worden gelezen."); }
+    finally { setImporting(false); }
+  }
+
+  async function importMileage(file: File) {
+    setImporting(true);
+    try {
+      const rows = await readImportRows(file);
+      if (!rows.length || rows.length > 500) throw new Error("Importeer 1 tot maximaal 500 kilometerregels per bestand.");
+      const imported = rows.map((row, index): DeclarationLine => {
+        for (const column of ["Datum", "Van", "Naar", "Kilometers", "Typecode", "Project"]) if (!(column in row)) throw new Error(`Kolom '${column}' ontbreekt.`);
+        const kilometers = importNumber(row.Kilometers);
+        const retour = String(row.Retour ?? "").trim().toLowerCase();
+        if (!["", "ja", "nee", "true", "false", "1", "0"].includes(retour)) throw new Error(`Regel ${index + 2}: Retour moet ja of nee zijn.`);
+        const line: DeclarationLine = { id: crypto.randomUUID(), date: String(row.Datum ?? "").slice(0, 10), kind: "kilometers", declarationType: String(row.Typecode ?? "").trim(), project: String(row.Project ?? "").trim(), from: String(row.Van ?? "").trim(), to: String(row.Naar ?? "").trim(), kilometers, roundTrip: ["ja", "true", "1"].includes(retour), distanceSource: "importbestand", description: String(row.Omschrijving || `${row.Van} → ${row.Naar}`).trim(), amount: 0, receipt: "" };
+        const error = lineError(line);
+        if (error) throw new Error(`Regel ${index + 2}: ${error}`);
+        return line;
+      });
+      persist({ ...batch, concept: true, submitted: false, lines: [...batch.lines, ...imported] });
+      setNotice(`${imported.length} kilometerregels geïmporteerd. Het veld Kilometers is het totale te declareren aantal, inclusief een eventuele retourrit.`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Import mislukt."); }
+    finally { setImporting(false); }
   }
 
   async function readReceipt(file: File) {
@@ -235,12 +313,14 @@ export function DeclarationBatchPoc() {
   function removeLine(id: string) {
     persist({ ...batch, concept: true, submitted: false, lines: batch.lines.filter((line) => line.id !== id) });
     setNotice("Regel verwijderd uit het concept.");
+    if (id === editingId) cancelEdit();
   }
 
   function resetDemo() {
     window.localStorage.removeItem(STORAGE_KEY);
     setBatch(INITIAL_BATCH);
     setDraft(EMPTY_LINE);
+    setEditingId(null);
     setNotice("De demo is hersteld.");
   }
 
@@ -267,8 +347,24 @@ export function DeclarationBatchPoc() {
       </section>
 
       <div className="rounded-2xl border border-brand-yellow/60 bg-brand-yellow/15 px-5 py-4 text-sm text-accent">
-        <strong>Demomodus:</strong> deze pagina onthoudt de gegevens alleen in deze browser en stuurt niets naar AFAS. De technische previews tonen precies wat de productie-integratie gaat opslaan en versturen.
+        <strong>Demomodus:</strong> concepten worden in deze browser bewaard; indienen is een simulatie. Aangesloten lookups lezen uit AFAS. Een echte afstandsbron verstuurt alleen de ingevoerde adressen naar Google of TomTom.
       </div>
+
+      <section className="tool-card p-6 md:p-8">
+        <p className="tool-kicker !text-brand-yellow-dark">Keuzes uit AFAS</p>
+        <h2 className="mt-2 text-xl font-semibold">Medewerker + datum → declaratiesoort → project → rit of bon</h2>
+        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted">Voor {batch.employeeId} bepaalt de declaratiedatum welke soorten en projecten zijn toegestaan. Wijzigen van de datum of soort vraagt om een nieuwe projectkeuze. Bij opslaan en indienen wordt iedere regel opnieuw gecontroleerd.</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+          <span className="rounded-full bg-accent-soft px-3 py-2 font-semibold">Geldigheidscombinaties: {validitySource === "laden" ? "laden…" : validitySource === "demo" ? "demogegevens" : validitySource === "bestand" ? "importbestand" : validitySource === "error" ? "niet beschikbaar" : "AFAS"} · {combinations.length}</span>
+          <label className="tool-button-secondary cursor-pointer !px-4 !py-2">Combinaties importeren<input type="file" accept=".json,.csv,.xlsx" className="sr-only" disabled={importing || batch.submitted || receiptReading || distanceReading} onChange={(e) => { const file = e.target.files?.[0]; if (file) void importValidity(file); e.target.value = ""; }} /></label>
+        </div>
+        {(lookupError || validityError) && <p role="alert" className="mt-3 text-sm text-danger">{lookupError || validityError} Opslaan en indienen zijn geblokkeerd totdat dit is hersteld.</p>}
+        <details className="mt-4 text-xs text-muted"><summary className="cursor-pointer font-semibold text-accent">Welke combinaties moeten worden aangeleverd?</summary>
+          <p className="mt-3 leading-relaxed">Gebruik uitgewerkte toegestane combinaties met kolommen <code>Medewerker, Project, Declaratiesoort, Begindatum, Einddatum</code>. Datums: JJJJ-MM-DD. Een bewust lege waarde geldt voor alle waarden; een ontbrekende kolom wordt afgekeurd. Begin- en einddatum tellen mee.</p>
+          <p className="mt-2 leading-relaxed">AFAS kan ook projectgroepen, integratiegroepen, functies, dimensies en teams gebruiken. Deze moeten in de GetConnector/export eerst naar de daadwerkelijke medewerker/project/declaratiesoort zijn vertaald, inclusief de koppeling van declaratiesoort naar kostensoort. De POC leest geen ruwe VaV1/BaV1-regels als een kant-en-klare autorisatie.</p>
+          <p className="mt-2 leading-relaxed">De combinaties zijn een invoercontrole. Medewerkeridentiteit en autorisatie moeten bij een echte InSite-koppeling ook op de server worden gecontroleerd.</p>
+        </details>
+      </section>
 
       <section className="tool-card overflow-hidden">
         <div className="flex flex-col gap-5 border-b border-rule p-6 md:flex-row md:items-center md:justify-between md:p-8">
@@ -301,11 +397,11 @@ export function DeclarationBatchPoc() {
                 <tr key={line.id} className="hover:bg-accent-soft/25">
                   <td className="whitespace-nowrap px-6 py-4">{formatDate(line.date)}</td>
                   <td className="px-4 py-4"><span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium">{line.kind === "kilometers" ? "Kilometers" : "Kosten"}</span></td>
-                  <td className="px-4 py-4 font-medium">{line.description}</td>
+                  <td className="px-4 py-4 font-medium">{line.description}{!batch.submitted && rulesReady && lineError(line) && <span className="mt-1 block text-xs font-normal text-danger">{lineError(line)}</span>}</td>
                   <td className="px-4 py-4 font-mono text-xs">{line.project}</td>
                   <td className="px-4 py-4 font-semibold">{line.kind === "kilometers" ? `${line.kilometers} km` : formatEuro(line.amount)}</td>
                   <td className="max-w-[180px] truncate px-4 py-4 text-xs text-muted">{line.receipt || "—"}</td>
-                  <td className="px-4 py-4"><button type="button" onClick={() => removeLine(line.id)} disabled={batch.submitted} className="text-xs font-semibold text-danger hover:underline disabled:cursor-not-allowed disabled:opacity-30">Verwijder</button></td>
+                  <td className="px-4 py-4"><div className="flex gap-3"><button type="button" onClick={() => editLine(line)} disabled={batch.submitted || receiptReading || distanceReading || importing} className="text-xs font-semibold text-brand-purple hover:underline disabled:opacity-30">Wijzigen</button><button type="button" onClick={() => removeLine(line.id)} disabled={batch.submitted || receiptReading || distanceReading || importing} className="text-xs font-semibold text-danger hover:underline disabled:cursor-not-allowed disabled:opacity-30">Verwijder</button></div></td>
                 </tr>
               ))}
             </tbody>
@@ -313,20 +409,18 @@ export function DeclarationBatchPoc() {
         </div>
 
         {!batch.submitted && (
-          <div className="border-t border-rule bg-accent-soft/25 p-6 md:p-8">
-            <h3 className="text-lg font-semibold">Declaratie toevoegen</h3>
-            <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Field label="Datum"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
-              <Field label="Soort"><select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as LineKind, declarationType: e.target.value === "kilometers" ? "ZK" : "K01" })}><option value="kosten">Kosten</option><option value="kilometers">Kilometers</option></select></Field>
-              <Field label={`Typecode · ${lookupSource === "afas" ? "AFAS" : lookupSource === "laden" ? "laden" : "demo"}`}><select value={draft.declarationType} onChange={(e) => setDraft({ ...draft, declarationType: e.target.value, kind: e.target.value === "ZK" ? "kilometers" : draft.kind === "kilometers" ? "kosten" : draft.kind })}>{declarationTypes.length === 0 && <option value={draft.declarationType}>{draft.declarationType}</option>}{declarationTypes.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
-              <Field label={`Project · ${lookupSource === "afas" ? "AFAS" : lookupSource === "laden" ? "laden" : "demo"}`}><select value={draft.project} onChange={(e) => setDraft({ ...draft, project: e.target.value })}>{projects.length === 0 && <option value={draft.project}>{draft.project}</option>}{projects.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
-              <div className="md:col-span-2"><Field label="Omschrijving"><input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Bijv. parkeerkosten" /></Field></div>
+          <div id="declaration-editor" className="border-t border-rule bg-accent-soft/25 p-6 md:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-semibold">{editingId ? "Conceptregel wijzigen" : "Declaratie toevoegen"}</h3><label className="tool-button-secondary cursor-pointer !px-4 !py-2 text-xs">Kilometerregels importeren<input type="file" accept=".csv,.xlsx,.json" className="sr-only" disabled={importing || receiptReading || distanceReading || Boolean(editingId) || !rulesReady} onChange={(e) => { const file = e.target.files?.[0]; if (file) void importMileage(file); e.target.value = ""; }} /></label></div>
+            <p className="mt-2 text-xs text-muted">Importkolommen: Datum, Van, Naar, Kilometers (totaal), Typecode, Project. Optioneel: Retour en Omschrijving. Alle regels worden vóór toevoegen gecontroleerd. <a className="font-semibold underline" href="/downloads/Kilometerregels-voorbeeld.csv" download>Voorbeeldbestand</a></p>
+            <fieldset disabled={distanceReading || receiptReading || importing} className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Field label="01 · Datum"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value, declarationType: "", project: "" })} /></Field>
+              <Field label={`02 · Declaratiesoort · ${lookupSource === "afas" ? "AFAS" : "demo"}`}><select value={draft.declarationType} disabled={!rulesReady} onChange={(e) => setDraft({ ...draft, declarationType: e.target.value, project: "", kind: declarationTypes.find((option) => option.code === e.target.value)?.kind ?? draft.kind })}><option value="">Kies declaratiesoort</option>{draft.declarationType && !allowedTypes.some((option) => option.code === draft.declarationType) && <option value={draft.declarationType} disabled>{draft.declarationType} · niet toegestaan</option>}{allowedTypes.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
+              <Field label={`03 · Project · ${lookupSource === "afas" ? "AFAS" : "demo"}`}><select value={draft.project} disabled={!rulesReady || !draft.declarationType} onChange={(e) => setDraft({ ...draft, project: e.target.value })}><option value="">Kies project / geen project</option>{draft.project && !allowedProjects.some((option) => option.code === draft.project) && <option value={draft.project} disabled>{draft.project} · niet toegestaan</option>}{allowedProjects.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
+              <Field label={`Invoer · ${declarationTypes.find((option) => option.code === draft.declarationType)?.kind ? "uit declaratiesoort" : "handmatig kiezen"}`}><select value={draft.kind} disabled={Boolean(declarationTypes.find((option) => option.code === draft.declarationType)?.kind)} onChange={(e) => setDraft({ ...draft, kind: e.target.value as LineKind })}><option value="kosten">Kosten</option><option value="kilometers">Kilometers</option></select></Field>
+              <p role="status" className={`md:col-span-2 lg:col-span-4 text-xs ${draftValid ? "text-success" : "text-danger"}`}>{draftValid ? `Geldige combinatie · ${validitySource === "demo" ? "democontrole" : validitySource === "bestand" ? "controle op importbestand" : "controle op AFAS-export"}` : "Kies een toegestane combinatie voor de datum en medewerker."}</p>
+              <div className="md:col-span-2"><Field label="04 · Omschrijving"><input maxLength={255} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Bijv. parkeerkosten" /></Field></div>
               {draft.kind === "kilometers" ? (
-                <>
-                  <Field label="Van"><input value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} /></Field>
-                  <Field label="Naar"><input value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} /></Field>
-                  <Field label="Kilometers"><input type="number" min="0" value={draft.kilometers || ""} onChange={(e) => setDraft({ ...draft, kilometers: Number(e.target.value) })} /></Field>
-                </>
+                <MileageEditor key={editingId ?? "new"} value={draft} onBusyChange={setDistanceReading} onChange={(changes) => setDraft((current) => ({ ...current, ...changes }))} />
               ) : (
                 <>
                   <Field label="Bedrag"><input type="number" min="0" step="0.01" value={draft.amount || ""} onChange={(e) => setDraft({ ...draft, amount: Number(e.target.value) })} /></Field>
@@ -339,20 +433,20 @@ export function DeclarationBatchPoc() {
                   </div>
                 </>
               )}
-            </div>
-            <button type="button" onClick={addLine} className="tool-button-secondary mt-5">+ Toevoegen aan concept</button>
+            </fieldset>
+            <div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={addLine} disabled={!rulesReady || !draftValid || receiptReading || distanceReading || importing} className="tool-button-secondary">{editingId ? "Wijziging opslaan" : "+ Toevoegen aan concept"}</button>{editingId && <button type="button" onClick={cancelEdit} disabled={receiptReading || distanceReading} className="tool-button-secondary">Annuleren</button>}</div>
           </div>
         )}
 
         <div className="flex flex-col gap-5 border-t border-rule p-6 md:flex-row md:items-center md:justify-between md:p-8">
           <div>
             <p className="font-semibold">{batch.submitted ? "Maanddeclaratie ingediend" : "Klaar met invoeren?"}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">{batch.submitted ? `${batch.lines.length} onderliggende declaraties zijn klaargezet voor AFAS.` : "Tussentijds opslaan start geen declaratie-workflow."}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">{batch.submitted ? "Demo-indiening voltooid. Ingediende regels zijn vergrendeld; een echte correctie volgt via AFAS." : `${invalidLines.length ? `${invalidLines.length} regel(s) vragen controle. ` : ""}Tussentijds opslaan start geen declaratie-workflow.`}</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={resetDemo} className="tool-button-secondary">Demo herstellen</button>
-            {!batch.submitted && <button type="button" onClick={saveConcept} className="tool-button-secondary">Concept opslaan</button>}
-            <button type="button" onClick={submitBatch} disabled={batch.submitted || !batch.lines.length} className="tool-button-primary">{batch.submitted ? "Ingediend ✓" : "Alles indienen"}</button>
+            <button type="button" onClick={resetDemo} disabled={receiptReading || distanceReading || importing} className="tool-button-secondary">Demo herstellen</button>
+            {!batch.submitted && <button type="button" onClick={saveConcept} disabled={Boolean(editingId) || receiptReading || distanceReading || importing} className="tool-button-secondary">Concept opslaan</button>}
+            <button type="button" onClick={submitBatch} disabled={batch.submitted || !batch.lines.length || !rulesReady || invalidLines.length > 0 || Boolean(editingId) || receiptReading || distanceReading || importing} className="tool-button-primary">{batch.submitted ? "Demo ingediend ✓" : "Alles indienen (demo)"}</button>
           </div>
         </div>
         {notice && <div role="status" className={`border-t px-6 py-4 text-sm md:px-8 ${batch.submitted ? "border-success/20 bg-success-soft text-success" : "border-brand-yellow/40 bg-brand-yellow/10 text-accent"}`}>{notice}</div>}
@@ -450,13 +544,17 @@ function buildFreeFilePayload(batch: Batch) {
       Kilometers: line.kind === "kilometers" ? line.kilometers : null,
       Van: line.from || null,
       Naar: line.to || null,
+      Retour: Boolean(line.roundTrip),
+      Afstandsbron: line.distanceSource || "handmatig",
+      AfstandBerekendOp: line.distanceCalculatedAt || null,
+      Routekeuze: line.routePreference || null,
       Bijlage: line.receipt || null,
     })),
   };
 }
 
 function buildDeclarationPayload(batch: Batch, line: DeclarationLine) {
-  const fields: Record<string, string | number> = {
+  const fields: Record<string, string | number | boolean> = {
     EmId: batch.employeeId,
     DaTi: line.date,
     BiId: line.declarationType,
@@ -466,7 +564,9 @@ function buildDeclarationPayload(batch: Batch, line: DeclarationLine) {
   if (line.kind === "kilometers") {
     fields.KmFr = line.from;
     fields.KmTo = line.to;
-    fields.KmCa = line.kilometers;
+    fields.KmCa = line.outboundKilometers ?? line.kilometers / (line.roundTrip ? 2 : 1);
+    fields.KmRt = Boolean(line.roundTrip);
+    fields.Qu = line.kilometers;
   } else {
     fields.CoAm = line.amount;
     if (line.receipt) fields.Filename = line.receipt;
@@ -489,4 +589,38 @@ function fileToDataUrl(file: File) {
     reader.onerror = () => reject(new Error("Bijlage kon niet worden gelezen."));
     reader.readAsDataURL(file);
   });
+}
+
+async function readImportRows(file: File): Promise<Record<string, unknown>[]> {
+  if (file.size > 3_000_000) throw new Error("Kies een importbestand kleiner dan 3 MB.");
+  if (file.name.toLowerCase().endsWith(".json")) {
+    const data = JSON.parse(await file.text());
+    const rows = Array.isArray(data) ? data : data.rows;
+    if (!Array.isArray(rows) || rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) throw new Error("JSON moet een lijst met regels of een GetConnector-resultaat met rows bevatten.");
+    return rows;
+  }
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true, raw: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!sheet) throw new Error("Het bestand bevat geen werkblad.");
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true });
+  for (const row of rows) {
+    for (const column of ["Datum", "Begindatum", "Einddatum"]) {
+      const value = row[column];
+      if (value instanceof Date) row[column] = `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+      else if (typeof value === "string") {
+        const match = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(value.trim());
+        if (match) row[column] = `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+      }
+    }
+  }
+  return rows;
+}
+
+function importNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  const text = String(value ?? "").trim();
+  // Punt of komma als decimaal; een dubbelzinnige duizendtalsnotatie afkeuren.
+  if (!/^\d+(?:[.,]\d{1,2})?$/.test(text)) throw new Error("Kilometers moet een getal zijn met maximaal twee decimalen, zonder duizendtalscheiding.");
+  return Number(text.replace(",", "."));
 }

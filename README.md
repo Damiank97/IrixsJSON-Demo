@@ -11,7 +11,9 @@ Interne AFAS-toolbox met vier onderdelen:
 - **JSON Schemabank** — doorzoek 201 AFAS UpdateConnectors en bekijk schema's
   en voorbeeld-payloads.
 - **Declaraties** — POC voor één maandconcept met meerdere declaratieregels,
-  AFAS-lookups, bonherkenning en afzonderlijke `HrDeclarationInSite`-payloads.
+  bewerkbare conceptregels, AFAS-lookups/geldigheidscombinaties, bonherkenning,
+  Google/TomTom-afstanden en afzonderlijke `HrDeclarationInSite`-payloads.
+  Zie [inrichting en bronnen](docs/declaraties.md) en `.env.example`.
 
 ## PURE-migratie
 
@@ -67,6 +69,8 @@ live lookups zijn de volgende Vercel environment variables nodig:
 - `AFAS_TOKEN`
 - `AFAS_PROJECTS_GETCONNECTOR`
 - `AFAS_DECLARATION_TYPES_GETCONNECTOR`
+- `AFAS_VALIDITY_GETCONNECTOR` — uitgewerkte combinaties met datumgrenzen
+- `GOOGLE_MAPS_API_KEY` en/of `TOMTOM_API_KEY` — echte afstandsberekening
 - Optioneel: `AFAS_PROJECT_CODE_FIELD`, `AFAS_PROJECT_LABEL_FIELD`,
   `AFAS_DECLARATION_TYPE_CODE_FIELD` en `AFAS_DECLARATION_TYPE_LABEL_FIELD`
 
