@@ -36,38 +36,36 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
   }
 
   return (
-    <>
-      {/* Hero */}
-      <section className="border-b border-rule">
-        <div className="max-w-6xl mx-auto px-8 py-16 grid grid-cols-1 md:grid-cols-12 gap-12">
-          <div className="md:col-span-8">
-            <p className="text-xs uppercase tracking-[0.25em] text-muted mb-4">
+    <div className="mx-auto max-w-7xl space-y-8 px-5 py-10 md:px-8 md:py-12">
+      <section className="tool-intro !items-stretch">
+          <div className="relative z-10 md:w-2/3">
+            <p className="tool-kicker mb-4">
               {connector.group}
             </p>
-            <h1 className="font-mono text-5xl text-ink mb-6 tracking-tight">
+            <h1 className="break-words font-mono text-4xl text-white mb-5 tracking-tight md:text-5xl">
               {connector.id}
             </h1>
-            <p className="font-display text-2xl italic text-ink/80 leading-snug max-w-2xl mb-8">
+            <p className="max-w-2xl text-base leading-relaxed text-white/80 mb-7">
               {connector.description || (
-                <span className="text-muted">Geen omschrijving beschikbaar.</span>
+                <span className="text-white/60">Geen omschrijving beschikbaar.</span>
               )}
             </p>
 
             {/* LLM-export knop */}
             <button
               onClick={copyForLlm}
-              className="text-xs font-mono px-4 py-2.5 border border-accent text-accent hover:bg-accent hover:text-canvas transition-colors inline-flex items-center gap-2"
+              className="tool-button-primary relative z-10 !px-5 !py-3 text-xs"
               title="Kopieert schema, omschrijving en een voorbeeld als markdown — plak in ChatGPT of Claude voor hulp"
             >
               {llmCopied ? "✓ Gekopieerd — plak in je LLM" : "📋 Kopieer als prompt voor ChatGPT / Claude"}
             </button>
           </div>
 
-          <div className="md:col-span-4 space-y-6 border-l border-rule pl-6">
+          <dl className="relative z-10 mt-8 grid grid-cols-3 gap-2 md:mt-0 md:w-1/3 md:self-end">
             <Field label="Methodes">
-              <div className="flex gap-2 mt-1">
+              <div className="mt-1 flex justify-center gap-1">
                 {connector.methods.map((m) => (
-                  <span key={m} className="font-mono text-xs px-2 py-1 border border-rule text-ink">
+                  <span key={m} className="font-mono text-xs text-white">
                     {m}
                   </span>
                 ))}
@@ -75,36 +73,26 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
             </Field>
             <Field label="Schema's">{schemas.length}</Field>
             <Field label="Voorbeelden">{examples.length}</Field>
+          </dl>
+      </section>
+
+      <section className="tool-card overflow-hidden">
+        <div className="grid grid-cols-1 divide-y divide-rule text-xs leading-relaxed text-muted md:grid-cols-3 md:divide-x md:divide-y-0">
+          <div>
+            <div className="p-5"><span className="text-brand-yellow-dark font-mono mr-2">01</span><strong className="text-accent">Genereren</strong> — testdata met eigen waarden of CSV-upload</div>
+          </div>
+          <div>
+            <div className="p-5"><span className="text-brand-yellow-dark font-mono mr-2">02</span><strong className="text-accent">Voorbeelden</strong> — officiële AFAS-payloads, kant-en-klaar</div>
+          </div>
+          <div>
+            <div className="p-5"><span className="text-brand-yellow-dark font-mono mr-2">03</span><strong className="text-accent">Schema</strong> — veldtypes en verplichte velden</div>
           </div>
         </div>
       </section>
 
-      {/* Uitleg-strip — alleen als hier nog geen voorbeelden zijn, of als context */}
-      <section className="bg-paper border-b border-rule">
-        <div className="max-w-6xl mx-auto px-8 py-6 text-xs text-muted leading-relaxed grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <span className="text-accent font-mono mr-2">→</span>
-            <strong className="text-ink font-normal">Genereren</strong> — random testdata met
-            eigen waarden of CSV upload, optioneel verrijkt met AI
-          </div>
-          <div>
-            <span className="text-accent font-mono mr-2">→</span>
-            <strong className="text-ink font-normal">Voorbeelden</strong> — alle officiële
-            voorbeeld-payloads van AFAS, kant-en-klaar
-          </div>
-          <div>
-            <span className="text-accent font-mono mr-2">→</span>
-            <strong className="text-ink font-normal">Schema</strong> — het volledige JSON-schema
-            inclusief alle veld-types en verplichte velden
-          </div>
-        </div>
-      </section>
-
-      {/* Content */}
-      <section className="max-w-6xl mx-auto px-8 py-12">
-        <div className="grid grid-cols-12 gap-8">
+      <section className="grid grid-cols-12 gap-6">
           {/* Sidebar nav */}
-          <nav className="col-span-12 md:col-span-3">
+          <nav className="tool-card col-span-12 h-fit p-5 md:col-span-3">
             <p className="text-xs uppercase tracking-[0.2em] text-muted mb-3">
               Genereren
             </p>
@@ -164,7 +152,7 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
             )}
           </nav>
 
-          <div className="col-span-12 md:col-span-9">
+          <div className="tool-card col-span-12 p-5 md:col-span-9 md:p-7">
             {view.kind === "generator" ? (
               <GeneratorPanel schemas={schemas} />
             ) : activeContent !== undefined && activeContent !== null ? (
@@ -178,9 +166,8 @@ export function ConnectorDetailView({ detail }: { detail: ConnectorDetail }) {
               </p>
             )}
           </div>
-        </div>
       </section>
-    </>
+    </div>
   );
 }
 
@@ -195,12 +182,12 @@ function NavItem({
   children: React.ReactNode;
   highlight?: boolean;
 }) {
-  const base = "w-full text-left px-3 py-2 text-sm border-l-2 transition-all";
+  const base = "w-full rounded-lg text-left px-3 py-2.5 text-sm transition-all";
   const styles = active
-    ? "border-accent text-ink bg-accent/[0.04]"
+    ? "text-white bg-accent"
     : highlight
-    ? "border-accent/50 text-ink hover:border-accent hover:bg-accent/[0.04]"
-    : "border-rule text-muted hover:text-ink hover:border-accent/40";
+    ? "text-accent bg-brand-yellow/20 hover:bg-brand-yellow/30"
+    : "text-muted hover:text-accent hover:bg-accent-soft";
   return (
     <button onClick={onClick} className={`${base} ${styles}`}>
       {children}
@@ -210,9 +197,9 @@ function NavItem({
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <dt className="text-xs uppercase tracking-[0.2em] text-muted mb-1">{label}</dt>
-      <dd className="font-display text-3xl text-ink tabular-nums">{children}</dd>
+    <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-3 text-center backdrop-blur">
+      <dt className="text-[8px] uppercase tracking-[0.16em] text-white/65 mb-1">{label}</dt>
+      <dd className="text-xl font-semibold text-white tabular-nums">{children}</dd>
     </div>
   );
 }
@@ -232,12 +219,12 @@ function JsonViewer({ data, label }: { data: unknown; label: string }) {
   }
 
   return (
-    <div className="border border-rule bg-paper">
+    <div className="overflow-hidden rounded-2xl border border-rule bg-paper">
       <div className="flex justify-between items-center px-4 py-3 border-b border-rule">
         <span className="text-xs uppercase tracking-[0.2em] text-muted">{label}</span>
         <button
           onClick={copy}
-          className="text-xs font-mono px-3 py-1.5 border border-rule text-ink hover:bg-accent hover:text-canvas hover:border-accent transition-colors"
+          className="rounded-full border border-accent/20 px-3 py-1.5 font-mono text-xs text-accent transition-colors hover:bg-accent hover:text-white"
         >
           {copied ? "✓ Gekopieerd" : "Kopieer JSON"}
         </button>

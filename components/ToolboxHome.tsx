@@ -5,8 +5,9 @@ import type { ConnectorIndexItem } from "@/lib/data";
 import { ConnectorBrowser } from "@/components/ConnectorBrowser";
 import { PureConfigMigrationTool } from "@/components/PureConfigMigrationTool";
 import { PureMigrationTool } from "@/components/PureMigrationTool";
+import { DeclarationBatchPoc } from "@/components/DeclarationBatchPoc";
 
-type Tool = "planning" | "config" | "schemas";
+type Tool = "planning" | "config" | "declarations" | "schemas";
 
 export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }) {
   const [tool, setTool] = useState<Tool>("planning");
@@ -27,7 +28,7 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
               <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-white/70">By Damian · interne tools</p>
             </div>
           </div>
-          <nav className="flex max-w-full gap-1 rounded-2xl border border-white/10 bg-white/5 p-1" aria-label="Toolbox onderdelen">
+          <nav className="flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-white/5 p-1" aria-label="Toolbox onderdelen">
             <div
               className="relative"
               onMouseEnter={() => setPureMenuOpen(true)}
@@ -79,6 +80,7 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
                 </div>
               )}
             </div>
+            <Tab active={tool === "declarations"} onClick={() => setTool("declarations")}>Declaraties</Tab>
             <Tab active={tool === "schemas"} onClick={() => setTool("schemas")}>JSON Schemabank</Tab>
           </nav>
         </div>
@@ -89,6 +91,9 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
       )}
       {tool === "config" && (
         <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-12"><PureConfigMigrationTool /></section>
+      )}
+      {tool === "declarations" && (
+        <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-12"><DeclarationBatchPoc /></section>
       )}
       {tool === "schemas" && (
         <SchemaBank connectors={connectors} totalSchemas={totalSchemas} totalExamples={totalExamples} />
