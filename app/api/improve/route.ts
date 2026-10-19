@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiConfiguration, completeJson } from "@/lib/aiProvider";
 
 /**
  * POST /api/improve
@@ -14,12 +15,11 @@ import { NextRequest, NextResponse } from "next/server";
  * Returns: { improved: unknown, notes: string[] }
  */
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
+  if (!aiConfiguration().configured) {
     return NextResponse.json(
       {
         error:
-          "GROQ_API_KEY ontbreekt. Voeg 'm toe in Vercel → Settings → Environment Variables.",
+          "AI is niet geconfigureerd of staat uit. Controleer de providerinstellingen.",
       },
       { status: 500 }
     );
@@ -73,72 +73,27 @@ Geef één JSON-object terug in deze vorm:
   "notes": ["maximaal drie korte controlepunten"]
 }`;
 
-  let groqResponse: Response;
-  try {
-    groqResponse = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "qwen/qwen3.8-27b",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.3,
-          max_completion_tokens: 5000,
-        }),
-        // Vercel timeout safety
-        signal: AbortSignal.timeout(30_000),
-      }
-    );
-  } catch (err) {
-    return NextResponse.json(
-      { error: "Groq onbereikbaar: " + (err instanceof Error ? err.message : String(err)) },
-      { status: 502 }
-    );
-  }
-
-  if (!groqResponse.ok) {
-    const errText = await groqResponse.text();
-    return NextResponse.json(
-      { error: `Groq fout (${groqResponse.status}): ${errText.slice(0, 300)}` },
-      { status: 502 }
-    );
-  }
-
-  const data = await groqResponse.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    return NextResponse.json({ error: "Lege response van Groq" }, { status: 502 });
-  }
-
   let parsed: { improved?: unknown; notes?: unknown };
   try {
-    parsed = JSON.parse(content);
+    parsed = await completeJson([
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ], { tokens: 5000, temperature: 0.3 }) as { improved?: unknown; notes?: unknown };
   } catch (err) {
     return NextResponse.json(
-      {
-        error: "Groq gaf geen geldige JSON terug",
-        raw: content.slice(0, 500),
-      },
+      { error: "AI-aanvraag mislukt: " + (err instanceof Error ? err.message : String(err)) },
       { status: 502 }
     );
   }
 
-  if (!("improved" in parsed)) {
+  if (!parsed || typeof parsed !== "object" || !("improved" in parsed)) {
     return NextResponse.json({ error: "Slimme controle gaf geen verbeterde payload terug" }, { status: 502 });
   }
 
   return NextResponse.json({
     improved: parsed.improved,
     notes: Array.isArray(parsed.notes) ? parsed.notes.map(String).slice(0, 3) : [],
-    model: "qwen/qwen3.8-27b",
+    model: aiConfiguration().model,
   });
 }
 

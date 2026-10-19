@@ -18,7 +18,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Irixs Toolbox (By Damian)",
-  description: "Interne AFAS-tools voor PURE-migraties, declaratieconcepten en UpdateConnector-schema's.",
+  description: "Irixs Toolbox met Dashboard Studio, Knowledge Engine, PURE-migraties, declaratieconcepten en AFAS-schema's.",
 };
 
 export default function RootLayout({

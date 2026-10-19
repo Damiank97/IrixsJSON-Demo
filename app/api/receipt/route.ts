@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiConfiguration, completeJson } from "@/lib/aiProvider";
 
 type ReceiptResult = {
   description: string;
@@ -9,8 +10,7 @@ type ReceiptResult = {
 };
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "Bonherkenning is nog niet geconfigureerd." }, { status: 503 });
+  if (!aiConfiguration("receipt").configured) return NextResponse.json({ error: "Bonherkenning is nog niet geconfigureerd of staat uit." }, { status: 503 });
 
   let body: { dataUrl?: string; fileName?: string };
   try {
@@ -24,12 +24,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "qwen/qwen3.8-27b",
-        messages: [{
+    const parsed = await completeJson([{
           role: "user",
           content: [
             {
@@ -38,20 +33,7 @@ export async function POST(request: NextRequest) {
             },
             { type: "image_url", image_url: { url: body.dataUrl } },
           ],
-        }],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-        max_completion_tokens: 500,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!response.ok) throw new Error(`Bonherkenning gaf status ${response.status}`);
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Geen resultaat ontvangen");
-    const parsed = JSON.parse(content) as Partial<ReceiptResult>;
+        }], { purpose: "receipt", tokens: 500 }) as Partial<ReceiptResult>;
     const result: ReceiptResult = {
       description: String(parsed.description ?? "").slice(0, 100),
       amount: typeof parsed.amount === "number" && Number.isFinite(parsed.amount) ? parsed.amount : null,

@@ -1,6 +1,12 @@
 # Irixs Toolbox (By Damian)
 
-Interne AFAS-toolbox met vier onderdelen:
+Interne AFAS-toolbox met een afzonderlijke Dashboard Studio-demo:
+
+- **Dashboard Studio** (`/studio`) — dashboards genereren, handmatig/AI-bewerken,
+  filteren en lokaal opslaan op fictieve omzet- en urendata.
+- **Knowledge Engine & Data Engineer** (`/internal`) — interne metadata-inspectie,
+  KPI-contracten en technische voorstellen met bronnen uit de bestaande schemabank.
+  Zie [demoflow en productiegrenzen](docs/dashboard-studio.md).
 
 - **PURE 9 → PURE 10** — zet een PURE 9-planning en de export van de
   `Voorcalculatieregels` GetConnector om naar een direct importeerbare PURE

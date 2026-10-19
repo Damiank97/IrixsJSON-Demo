@@ -82,6 +82,8 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
             </div>
             <Tab active={tool === "declarations"} onClick={() => setTool("declarations")}>Declaraties</Tab>
             <Tab active={tool === "schemas"} onClick={() => setTool("schemas")}>JSON Schemabank</Tab>
+            <a href="/studio" className="rounded-xl px-4 py-2.5 text-xs font-semibold text-white/80 hover:bg-white/10">Dashboard Studio ↗</a>
+            <a href="/internal" className="rounded-xl px-4 py-2.5 text-xs font-semibold text-white/80 hover:bg-white/10">Knowledge & Data Engineer ↗</a>
           </nav>
         </div>
       </header>

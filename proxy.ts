@@ -16,6 +16,11 @@ export async function proxy(request: NextRequest) {
 
   const session = request.cookies.get(SESSION_COOKIE)?.value;
   if (await verifySessionToken(session, expectedHash)) return NextResponse.next();
+  if (await verifySessionToken(session, `${expectedHash}:studio-customer`)) {
+    if (pathname === "/studio" || pathname === "/api/studio/generate") return NextResponse.next();
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Dit onderdeel is alleen voor Irixs-medewerkers." }, { status: 403 });
+    return NextResponse.redirect(new URL("/studio", request.url));
+  }
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "Inloggen vereist." }, { status: 401 });
