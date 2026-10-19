@@ -1,6 +1,6 @@
 # Irixs Toolbox (By Damian)
 
-Interne AFAS-toolbox met drie onderdelen:
+Interne AFAS-toolbox met vier onderdelen:
 
 - **PURE 9 → PURE 10** — zet een PURE 9-planning en de export van de
   `Voorcalculatieregels` GetConnector om naar een direct importeerbare PURE
@@ -10,6 +10,8 @@ Interne AFAS-toolbox met drie onderdelen:
   perioden en klantgebonden autorisatiegroepen.
 - **JSON Schemabank** — doorzoek 201 AFAS UpdateConnectors en bekijk schema's
   en voorbeeld-payloads.
+- **Declaraties** — POC voor één maandconcept met meerdere declaratieregels,
+  AFAS-lookups, bonherkenning en afzonderlijke `HrDeclarationInSite`-payloads.
 
 ## PURE-migratie
 
@@ -58,5 +60,15 @@ npm run build
 npm start
 ```
 
-Er zijn geen environment variables nodig. De site kan rechtstreeks vanuit deze
-repository door Vercel worden gebouwd.
+Zonder AFAS-instellingen gebruikt de declaratie-POC neutrale demo-opties. Voor
+live lookups zijn de volgende Vercel environment variables nodig:
+
+- `AFAS_BASE_URL` — bijvoorbeeld `https://12345.rest.afas.online/ProfitRestServices`
+- `AFAS_TOKEN`
+- `AFAS_PROJECTS_GETCONNECTOR`
+- `AFAS_DECLARATION_TYPES_GETCONNECTOR`
+- Optioneel: `AFAS_PROJECT_CODE_FIELD`, `AFAS_PROJECT_LABEL_FIELD`,
+  `AFAS_DECLARATION_TYPE_CODE_FIELD` en `AFAS_DECLARATION_TYPE_LABEL_FIELD`
+
+`GROQ_API_KEY` activeert de bonherkenning en de bestaande JSON-verrijking. Alle
+geheime waarden blijven server-side en worden nooit naar de browser gestuurd.

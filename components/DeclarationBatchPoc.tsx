@@ -31,6 +31,8 @@ type Batch = {
 };
 
 type Preview = "flow" | "storage" | "posts";
+type LookupOption = { code: string; label: string };
+type ReceiptResult = { description: string; amount: number | null; date: string | null; merchant: string | null; confidence: "laag" | "middel" | "hoog" };
 
 const STORAGE_KEY = "irixs-declaration-poc-v1";
 
@@ -105,6 +107,12 @@ export function DeclarationBatchPoc() {
   const [preview, setPreview] = useState<Preview>("flow");
   const [notice, setNotice] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [projects, setProjects] = useState<LookupOption[]>([]);
+  const [declarationTypes, setDeclarationTypes] = useState<LookupOption[]>([]);
+  const [lookupSource, setLookupSource] = useState<"laden" | "demo" | "afas">("laden");
+  const [receiptReading, setReceiptReading] = useState(false);
+  const [receiptResult, setReceiptResult] = useState<ReceiptResult | null>(null);
+  const [receiptError, setReceiptError] = useState("");
 
   useEffect(() => {
     try {
@@ -115,6 +123,22 @@ export function DeclarationBatchPoc() {
     } finally {
       setHydrated(true);
     }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetch("/api/afas/lookups?type=projects").then((response) => response.json()),
+      fetch("/api/afas/lookups?type=declarationTypes").then((response) => response.json()),
+    ]).then(([projectData, typeData]) => {
+      if (!active) return;
+      setProjects(projectData.options ?? []);
+      setDeclarationTypes(typeData.options ?? []);
+      setLookupSource(projectData.source === "afas" && typeData.source === "afas" ? "afas" : "demo");
+    }).catch(() => {
+      if (active) setLookupSource("demo");
+    });
+    return () => { active = false; };
   }, []);
 
   const totalAmount = useMemo(
@@ -164,7 +188,48 @@ export function DeclarationBatchPoc() {
     };
     persist({ ...batch, concept: true, submitted: false, lines: [...batch.lines, nextLine] });
     setDraft({ ...EMPTY_LINE, date: draft.date });
+    setReceiptResult(null);
+    setReceiptError("");
     setNotice("Regel toegevoegd aan het maandconcept.");
+  }
+
+  async function readReceipt(file: File) {
+    setDraft((current) => ({ ...current, receipt: file.name }));
+    setReceiptResult(null);
+    setReceiptError("");
+    if (!file.type.startsWith("image/")) {
+      setReceiptError("Automatisch uitlezen ondersteunt in deze POC JPG, PNG en WEBP. De PDF kan wel als bijlage mee.");
+      return;
+    }
+    if (file.size > 3_000_000) {
+      setReceiptError("De afbeelding is groter dan 3 MB. Kies voor de demo een kleinere foto.");
+      return;
+    }
+
+    setReceiptReading(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const response = await fetch("/api/receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, dataUrl }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Bon kon niet worden uitgelezen.");
+      const receipt = result as ReceiptResult;
+      setReceiptResult(receipt);
+      setDraft((current) => ({
+        ...current,
+        description: receipt.description || current.description,
+        amount: receipt.amount ?? current.amount,
+        date: receipt.date ?? current.date,
+      }));
+      setNotice("Bon uitgelezen. Controleer de voorgestelde omschrijving, datum en het bedrag.");
+    } catch (error) {
+      setReceiptError(error instanceof Error ? error.message : "Bon kon niet worden uitgelezen.");
+    } finally {
+      setReceiptReading(false);
+    }
   }
 
   function removeLine(id: string) {
@@ -253,8 +318,8 @@ export function DeclarationBatchPoc() {
             <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Field label="Datum"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
               <Field label="Soort"><select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as LineKind, declarationType: e.target.value === "kilometers" ? "ZK" : "K01" })}><option value="kosten">Kosten</option><option value="kilometers">Kilometers</option></select></Field>
-              <Field label="Typecode"><input value={draft.declarationType} onChange={(e) => setDraft({ ...draft, declarationType: e.target.value })} /></Field>
-              <Field label="Project"><input value={draft.project} onChange={(e) => setDraft({ ...draft, project: e.target.value })} /></Field>
+              <Field label={`Typecode · ${lookupSource === "afas" ? "AFAS" : lookupSource === "laden" ? "laden" : "demo"}`}><select value={draft.declarationType} onChange={(e) => setDraft({ ...draft, declarationType: e.target.value, kind: e.target.value === "ZK" ? "kilometers" : draft.kind === "kilometers" ? "kosten" : draft.kind })}>{declarationTypes.length === 0 && <option value={draft.declarationType}>{draft.declarationType}</option>}{declarationTypes.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
+              <Field label={`Project · ${lookupSource === "afas" ? "AFAS" : lookupSource === "laden" ? "laden" : "demo"}`}><select value={draft.project} onChange={(e) => setDraft({ ...draft, project: e.target.value })}>{projects.length === 0 && <option value={draft.project}>{draft.project}</option>}{projects.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
               <div className="md:col-span-2"><Field label="Omschrijving"><input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Bijv. parkeerkosten" /></Field></div>
               {draft.kind === "kilometers" ? (
                 <>
@@ -265,7 +330,13 @@ export function DeclarationBatchPoc() {
               ) : (
                 <>
                   <Field label="Bedrag"><input type="number" min="0" step="0.01" value={draft.amount || ""} onChange={(e) => setDraft({ ...draft, amount: Number(e.target.value) })} /></Field>
-                  <Field label="Bijlage"><input type="file" onChange={(e) => setDraft({ ...draft, receipt: e.target.files?.[0]?.name ?? "" })} /></Field>
+                  <div className="lg:col-span-2">
+                    <Field label="Bon of bijlage"><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (file) void readReceipt(file); }} /></Field>
+                    {receiptReading && <p className="mt-2 text-xs font-medium text-brand-purple">Bon wordt uitgelezen…</p>}
+                    {receiptError && <p className="mt-2 text-xs font-medium text-danger">{receiptError}</p>}
+                    {receiptResult && <p className="mt-2 rounded-xl border border-success/20 bg-success-soft px-3 py-2 text-xs text-success">Voorstel ingevuld · {receiptResult.merchant || "leverancier onbekend"} · zekerheid {receiptResult.confidence}. Controleer de velden vóór toevoegen.</p>}
+                    <p className="mt-2 text-[11px] leading-relaxed text-muted">Bij het uitlezen wordt alleen de gekozen afbeelding tijdelijk naar de beveiligde bonherkenning gestuurd. De foto wordt niet in de browseropslag bewaard.</p>
+                  </div>
                 </>
               )}
             </div>
@@ -409,4 +480,13 @@ function formatEuro(value: number) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${value}T12:00:00`));
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Bijlage kon niet worden gelezen."));
+    reader.readAsDataURL(file);
+  });
 }
