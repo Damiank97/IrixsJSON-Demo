@@ -260,10 +260,9 @@ function hasIncludedChild(
       : objectsSchema;
   if (!target?.properties) return false;
   const required = new Set(target.required ?? []);
-  for (const [key, child] of Object.entries(target.properties)) {
+  for (const key of Object.keys(target.properties)) {
     if (required.has(key)) return true;
     if (toggle.included.has(key)) return true;
-    if (isStructural(key, child)) return true;
   }
   return false;
 }
