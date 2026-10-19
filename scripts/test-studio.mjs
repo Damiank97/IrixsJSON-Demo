@@ -22,6 +22,20 @@ function loader(environment = { IRIXS_AI_PROVIDER: "disabled" }, fakeFetch = () 
 const load = loader();
 const model = load("lib/studio/model.ts"), planner = load("lib/studio/planner.ts"), analytics = load("lib/studio/analytics.ts");
 
+test("Studio accepteert een geldig AI-plan met compact cataloguscontract", async () => {
+  let providerBody;
+  const api = loader({ GROQ_API_KEY: "dummy-not-a-real-key" }, async (_url, options) => {
+    providerBody = JSON.parse(options.body);
+    return Response.json({choices:[{message:{content:JSON.stringify(planner.makeDashboard())}}]});
+  })("app/api/studio/generate/route.ts");
+  const response = await api.POST(new Request("http://localhost/api/studio/generate", {method:"POST",body:JSON.stringify({question:planner.EXAMPLE_PROMPT})}));
+  const result = await response.json();
+  assert.equal(response.status,200); assert.equal(result.trace.source,"ai");
+  assert.equal(result.trace.checks.length,6);
+  assert.ok(JSON.stringify(providerBody.messages).length < 11000, "Houd metadata compact voor de demoprovider");
+  assert.equal(providerBody.max_completion_tokens,2500);
+});
+
 test("demodata is reproduceerbaar, filters gelden ook voor de vergelijkingsperiode", () => {
   assert.equal(analytics.demoRows("revenue").length,864);
   assert.equal(JSON.stringify(analytics.demoRows("revenue")),JSON.stringify(analytics.demoRows("revenue")));
