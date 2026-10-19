@@ -203,16 +203,12 @@ export function findOptionalEntities(
     }
 
     if (n.properties && typeof n.properties === "object") {
-      const childKeys = Object.keys(n.properties);
-      const multiChildObjects =
-        insideObjectsContainer && childKeys.length > 1;
-
       for (const [name, child] of Object.entries(
         n.properties as Record<string, JSONSchema>
       )) {
         const childIsRequired = localRequired.has(name);
         if (
-          multiChildObjects &&
+          insideObjectsContainer &&
           isOptionalNestedEntity(name, child, childIsRequired)
         ) {
           const desc = (child.description ?? "").slice(0, 80);
@@ -268,8 +264,6 @@ function hasIncludedChild(
     if (required.has(key)) return true;
     if (toggle.included.has(key)) return true;
     if (isStructural(key, child)) return true;
-    // Single-child Objects: hoofdrecord (zoals FiEntries) — altijd meenemen
-    if (Object.keys(target.properties).length === 1) return true;
   }
   return false;
 }
