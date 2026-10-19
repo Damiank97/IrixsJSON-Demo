@@ -1,34 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ConnectorIndexItem } from "@/lib/data";
 import { ConnectorBrowser } from "@/components/ConnectorBrowser";
 import { PureConfigMigrationTool } from "@/components/PureConfigMigrationTool";
 import { PureMigrationTool } from "@/components/PureMigrationTool";
 import { DeclarationBatchPoc } from "@/components/DeclarationBatchPoc";
-
-type Tool = "planning" | "config" | "declarations" | "schemas";
+import { ToolboxLanding } from "@/components/ToolboxLanding";
+import { toolFromHash, type ToolboxTool } from "@/lib/toolboxNavigation";
 
 export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }) {
-  const [tool, setTool] = useState<Tool>("planning");
+  const [tool, setTool] = useState<ToolboxTool>("home");
   const [pureMenuOpen, setPureMenuOpen] = useState(false);
   const totalSchemas = connectors.reduce((sum, connector) => sum + connector.schema_count, 0);
   const totalExamples = connectors.reduce((sum, connector) => sum + connector.example_count, 0);
+
+  useEffect(() => {
+    const syncTool = () => {
+      const next = toolFromHash(window.location.hash);
+      setTool(next);
+      setPureMenuOpen(false);
+      if (next !== "home") window.scrollTo({ top: 0, behavior: "instant" });
+    };
+    syncTool();
+    window.addEventListener("hashchange", syncTool);
+    return () => window.removeEventListener("hashchange", syncTool);
+  }, []);
+
+  function selectTool(next: ToolboxTool) {
+    setTool(next);
+    setPureMenuOpen(false);
+    window.location.hash = next === "home" ? "" : next;
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }
 
   return (
     <main className="min-h-screen">
       <header className="relative z-20 border-b border-white/10 bg-accent text-white shadow-[0_8px_30px_rgba(52,12,70,0.12)]">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div className="flex items-center gap-3">
+          <a href="/" aria-label="Irixs Toolbox home" className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-yellow font-mono text-sm font-bold text-accent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)]">
               IX
             </div>
             <div>
               <p className="text-sm font-semibold tracking-tight">Irixs Toolbox</p>
-              <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-white/70">By Damian · interne tools</p>
+              <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-white/70">By Damian · tools & demo’s</p>
             </div>
-          </div>
+          </a>
           <nav className="flex max-w-full flex-wrap gap-1 overflow-visible rounded-2xl border border-white/10 bg-white/5 p-1" aria-label="Toolbox onderdelen">
+            <Tab active={tool === "home"} onClick={() => selectTool("home")}>Home</Tab>
             <div
               className="relative"
               onMouseEnter={() => setPureMenuOpen(true)}
@@ -42,6 +62,7 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
                 aria-haspopup="menu"
                 aria-expanded={pureMenuOpen}
                 onClick={() => setPureMenuOpen(true)}
+                onKeyDown={(event) => { if (event.key === "Escape") setPureMenuOpen(false); }}
                 className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
                   tool === "planning" || tool === "config"
                     ? "bg-brand-yellow text-accent shadow-sm"
@@ -61,7 +82,7 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
                     <PureMenuItem
                       active={tool === "planning"}
                       onClick={() => {
-                        setTool("planning");
+                        selectTool("planning");
                         setPureMenuOpen(false);
                       }}
                     >
@@ -70,7 +91,7 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
                     <PureMenuItem
                       active={tool === "config"}
                       onClick={() => {
-                        setTool("config");
+                        selectTool("config");
                         setPureMenuOpen(false);
                       }}
                     >
@@ -80,13 +101,15 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
                 </div>
               )}
             </div>
-            <Tab active={tool === "declarations"} onClick={() => setTool("declarations")}>Declaraties</Tab>
-            <Tab active={tool === "schemas"} onClick={() => setTool("schemas")}>JSON Schemabank</Tab>
+            <Tab active={tool === "declarations"} onClick={() => selectTool("declarations")}>Declaraties</Tab>
+            <Tab active={tool === "schemas"} onClick={() => selectTool("schemas")}>JSON Schemabank</Tab>
             <a href="/studio" className="rounded-xl px-4 py-2.5 text-xs font-semibold text-white/80 hover:bg-white/10">Dashboard Studio ↗</a>
             <a href="/internal" className="rounded-xl px-4 py-2.5 text-xs font-semibold text-white/80 hover:bg-white/10">Knowledge & Data Engineer ↗</a>
           </nav>
         </div>
       </header>
+
+      {tool === "home" && <ToolboxLanding connectorCount={connectors.length} />}
 
       {tool === "planning" && (
         <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-12"><PureMigrationTool /></section>
@@ -103,7 +126,7 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
 
       <footer className="mt-16 border-t border-rule bg-white/65">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-xs text-muted md:px-8">
-          <span>Irixs Toolbox · AFAS hulpmiddelen voor consultants</span>
+          <span>Irixs Toolbox · AFAS-hulpmiddelen voor intern gebruik en demo’s</span>
           <span className="rounded-full bg-accent-soft px-3 py-1.5 font-mono text-[10px] text-accent">By Damian</span>
         </div>
       </footer>
@@ -116,6 +139,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
     <button
       type="button"
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
       className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
         active ? "bg-brand-yellow text-accent shadow-sm" : "text-white/65 hover:bg-white/10 hover:text-white"
       }`}

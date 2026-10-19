@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { ADMINS, DATASETS, METRICS, MONTHS, REQUEST_STORAGE, SOURCE_STORAGE, STUDIO_STORAGE, newWidget, validateDashboard, type Dashboard, type DatasetId, type EngineTrace, type GenerationResult, type MissingRequest, type Widget } from "@/lib/studio/model";
 import { demoDashboards, EXAMPLE_PROMPT, makeDashboard } from "@/lib/studio/planner";
-import { formatMetric, widgetData } from "@/lib/studio/analytics";
 import { DashboardWidget } from "./DashboardWidget";
 import { StudioIcon as Icon } from "./StudioIcon";
 
@@ -98,27 +97,31 @@ export function DashboardStudio({ internal }: { internal: boolean }) {
 
   const activeWidget = current?.widgets.find((w) => w.id === selected);
   const editing = screen === "editor";
+  const section = screen === "generate" ? "generate" : screen === "sources" ? "sources" : "library";
+  const toolboxHref = internal ? "/" : "/login?next=%2F";
   const canEdit = profile === "eigenaar" || current?.owner === profile;
   const visible = dashboards.filter((d) => (d.owner === profile || d.shared) && `${d.title} ${d.description}`.toLowerCase().includes(search.toLowerCase()));
   if (!ready) return <div className="studio-loading">Dashboard Studio wordt geopend…</div>;
 
   return <main className="studio-app">
     <aside className="studio-sidebar">
-      <a className="studio-brand" href="/studio"><span>ix</span><div>Irixs <b>Dashboard Studio</b></div></a>
+      <a className="studio-brand" href={toolboxHref} aria-label="Terug naar Irixs Toolbox"><span>ix</span><div>Irixs <b>Dashboard Studio</b></div></a>
       <div className="studio-workspace"><span className="studio-avatar">ID</span><div>Irixs Demo<span>Demonstratiewerkruimte</span></div><span>⌄</span></div>
       <div className="studio-nav-label">WERKRUIMTE</div>
-      <button className={screen !== "sources" ? "active" : ""} onClick={() => leave("library")}><Icon name="grid"/>Dashboards<span className="studio-count">{dashboards.filter((d)=>d.owner===profile||d.shared).length}</span></button>
-      <button onClick={() => leave("generate")}><Icon name="spark"/>Maken met AI</button>
-      <button className={screen === "sources" ? "active" : ""} onClick={() => leave("sources")}><Icon name="data"/>Mijn databronnen</button>
+      <button className={section === "library" ? "active" : ""} aria-current={section === "library" ? "page" : undefined} onClick={() => leave("library")}><Icon name="grid"/>Dashboards<span className="studio-count">{dashboards.filter((d)=>d.owner===profile||d.shared).length}</span></button>
+      <button className={section === "generate" ? "active" : ""} aria-current={section === "generate" ? "page" : undefined} onClick={() => leave("generate")}><Icon name="spark"/>Maken met AI</button>
+      <button className={section === "sources" ? "active" : ""} aria-current={section === "sources" ? "page" : undefined} onClick={() => leave("sources")}><Icon name="data"/>Mijn databronnen</button>
       <div className="studio-sidebar-note"><span className="studio-dot"/> Demonstratiedata<p>Ontdek de mogelijkheden met fictieve cijfers. Er is geen live AFAS-koppeling.</p></div>
       <div className="studio-sidebar-bottom">
-        {internal && <><a href="/internal"><Icon name="layers"/>Irixs intern ↗</a><a href="/"><Icon name="back"/>Terug naar Toolbox</a></>}
+        {internal && <a href="/internal"><Icon name="layers"/>Irixs intern ↗</a>}
+        <a href={toolboxHref}><Icon name="back"/>Terug naar Toolbox</a>
+        {!internal && <small>Voor Irixs-onderdelen log je opnieuw in.</small>}
         <div className="studio-demo-profile"><label htmlFor="studio-profile">Demoprofiel</label><select id="studio-profile" value={profile} onChange={(e) => { if (dirty && !window.confirm("Niet-opgeslagen wijzigingen verlaten?")) return; setProfile(e.target.value); setScreen("library"); setDirty(false); }}><option value="eigenaar">Eigenaar · bewerken</option><option value="collega">Collega · gedeeld bekijken</option></select></div>
       </div>
     </aside>
 
     <section className="studio-main">
-      <header className="studio-topbar"><div><span className="studio-breadcrumb">Werkruimte</span><span>/</span><strong>{screen === "sources" ? "Databronnen" : "Dashboards"}</strong></div><div><span className="studio-demo-badge">DEMO</span>{internal ? <button onClick={() => void enterCustomer()}>Klantdemo starten <Icon name="arrow" size={14}/></button> : <span className="studio-breadcrumb">InSite-integratie · klantmodus</span>}<span className="studio-avatar small">{profile === "eigenaar" ? "DM" : "CO"}</span></div></header>
+      <header className="studio-topbar"><div><span className="studio-breadcrumb">Werkruimte</span><span>/</span><strong>{section === "sources" ? "Databronnen" : section === "generate" ? "Maken met AI" : "Dashboards"}</strong></div><div><span className="studio-demo-badge">DEMO</span>{internal ? <button onClick={() => void enterCustomer()}>Klantdemo starten <Icon name="arrow" size={14}/></button> : <span className="studio-breadcrumb">InSite-integratie · klantmodus</span>}<span className="studio-avatar small">{profile === "eigenaar" ? "DM" : "CO"}</span></div></header>
       <div className="studio-content">
         {notice && <div className="studio-notice" role="status"><Icon name="info"/>{notice}<button onClick={()=>setNotice("")} aria-label="Melding sluiten"><Icon name="close" size={14}/></button></div>}
 

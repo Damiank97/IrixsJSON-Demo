@@ -34,6 +34,14 @@ test("Studio accepteert een geldig AI-plan met compact cataloguscontract", async
   assert.equal(result.trace.checks.length,6);
   assert.ok(JSON.stringify(providerBody.messages).length < 11000, "Houd metadata compact voor de demoprovider");
   assert.equal(providerBody.max_completion_tokens,2500);
+  assert.match(providerBody.messages[0].content, /JSON-object/);
+});
+
+test("Toolbox opent standaard home en bewaart herkenbare tooladressen", () => {
+  const {toolFromHash} = load("lib/toolboxNavigation.ts");
+  assert.equal(toolFromHash(""),"home"); assert.equal(toolFromHash("#toolbox-tools"),"home");
+  for (const id of ["planning","config","declarations","schemas"]) assert.equal(toolFromHash(`#${id}`),id);
+  assert.equal(toolFromHash("#unknown"),"home");
 });
 
 test("demodata is reproduceerbaar, filters gelden ook voor de vergelijkingsperiode", () => {

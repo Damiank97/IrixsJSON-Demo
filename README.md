@@ -1,6 +1,8 @@
 # Irixs Toolbox (By Damian)
 
-Interne AFAS-toolbox met een afzonderlijke Dashboard Studio-demo:
+AFAS-hulpmiddelen voor intern gebruik en demonstraties. De home (`/`) licht het doel toe en biedt filters voor intern gebruik en demo’s. De keuze is navigatie, geen wijziging van toegangsrechten. Elke toolkaart benoemt of het om een hulpmiddel of een demo/POC gaat.
+
+Directe adressen: `/#planning`, `/#config`, `/#declarations`, `/#schemas`, `/studio` en `/internal`. Deze blijven na herladen werken.
 
 - **Dashboard Studio** (`/studio`) — dashboards genereren, handmatig/AI-bewerken,
   filteren en lokaal opslaan op fictieve omzet- en urendata.
@@ -14,7 +16,7 @@ Interne AFAS-toolbox met een afzonderlijke Dashboard Studio-demo:
 - **Config 9 → 10** — zet het PURE 9 `app.config`-bestand om naar een complete
   Azure App Configuration KVSet-import, inclusief planningstypes, HEX-kleuren,
   perioden en klantgebonden autorisatiegroepen.
-- **JSON Schemabank** — doorzoek 201 AFAS UpdateConnectors en bekijk schema's
+- **JSON Schemabank** — doorzoek AFAS UpdateConnectors en bekijk schema's
   en voorbeeld-payloads.
 - **Declaraties** — POC voor één maandconcept met meerdere declaratieregels,
   bewerkbare conceptregels, AFAS-lookups/geldigheidscombinaties, bonherkenning,
@@ -25,14 +27,15 @@ Interne AFAS-toolbox met een afzonderlijke Dashboard Studio-demo:
 
 Werkwijze:
 
-1. Download en importeer `PURE 9 weergave voor export.viw` in PURE 9 en
-   exporteer daarmee vrije bestandswaarden 09.
+1. Zet in AFAS op het gebruikte vrije bestand van PURE 9 **Datum gebruiken** aan.
+   Maak een weergave `PURE - Export`, selecteer alle velden van boven naar beneden
+   (bij uitklapvelden alleen het bovenliggende veld) en exporteer de regels.
 2. Download en importeer `Voorcalculatieregels.gcn` en exporteer de
    GetConnector.
 3. Upload beide exports (`.xlsx`, `.xls`, `.csv` of `.tsv`) en voer de
    conversie uit.
 4. Download de PURE 10-CSV. `Import PURE10.ipd` kan daarbij optioneel meteen of
-   later los worden gedownload.
+   ook vooraf of later los worden gedownload. Importeer **Datum** met de actie **Inlezen**.
 
 De Toolbox controleert onder andere verplichte velden, GUID-matches, dubbele
 Event-guid's, werksoorttype `Wst`, datums, uren en perioden. Alleen na een
@@ -40,8 +43,7 @@ foutloze controle wordt de PURE 10-CSV beschikbaar. De uitvoer gebruikt de
 bewezen vaste 22-kolomsvolgorde, puntkomma's, Nederlandse decimale komma's,
 UTF-8 BOM en CRLF-regelafbrekingen.
 
-Alle drie de AFAS-definitiebestanden zijn rechtstreeks in de PURE-tool te
-downloaden.
+De GetConnector en PURE 10-importdefinitie zijn rechtstreeks in de PURE-tool te downloaden.
 
 ## Configuratiemigratie
 
