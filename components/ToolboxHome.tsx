@@ -28,7 +28,7 @@ export function ToolboxHome({ connectors }: { connectors: ConnectorIndexItem[] }
               <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-white/70">By Damian · interne tools</p>
             </div>
           </div>
-          <nav className="flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-white/5 p-1" aria-label="Toolbox onderdelen">
+          <nav className="flex max-w-full flex-wrap gap-1 overflow-visible rounded-2xl border border-white/10 bg-white/5 p-1" aria-label="Toolbox onderdelen">
             <div
               className="relative"
               onMouseEnter={() => setPureMenuOpen(true)}
