@@ -15,7 +15,7 @@ const missing=await(await call("/api/studio/generate",{...request,question:"Verz
 const disabled=await(await call("/api/studio/generate",{...request,available:["hours"]})).json();assert.ok(disabled.missing);
 assert.equal((await call("/api/studio/generate",{question:""})).status,400);
 assert.equal((await call("/api/knowledge?id=KnOrganisation")).status,200);
-assert.equal((await call("/studio/data")).status,200);
+const legacyData=await call("/studio/data");assert.equal(legacyData.status,307);assert.equal(legacyData.headers.get("location"),"/studio#data");
 const advice=await(await call("/api/knowledge",{question:"CRM naar AFAS synchroniseren"})).json();assert.ok(advice.evidence.some(e=>e.id==="KnOrganisation"));
 const scoped=await call("/api/studio/session",{});assert.equal(scoped.status,200);const customer=scoped.headers.get("set-cookie").split(";")[0];
 assert.equal((await call("/studio",undefined,customer)).status,200);

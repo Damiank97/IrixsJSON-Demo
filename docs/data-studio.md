@@ -1,6 +1,14 @@
-# Irixs Data Studio — eerste BI-werkplek
+# Irixs Studio — dashboards met één gedeeld datamodel
 
-`/studio/data` bouwt voort op de Toolbox en is bereikbaar via de home en **Data & formules** in Dashboard Studio. Dit is een werkende, browserlokale BI-kern, geen volledige Power BI-, Excel- of DAX-implementatie. De bestaande AI-Dashboard Studio blijft een afzonderlijke generator voor financiële en urenrapporten; de nieuwe Data Studio is een handmatige rapport-/databouwer. Beide hergebruiken de bestaande deterministische omzet- en urendata.
+`/studio` is één Studio. **Dashboards** bevat PURE planning/behoefte, resultaat/budget, omzet/klanten, projecten/inzet en eigen dashboards. Een dashboard kan worden bekeken, handmatig bewerkt of vanuit een vraag worden gemaakt. **Data & model** bevat alleen de onderliggende tabellen, formules, relaties en wijzigingen. Het oude `/studio/data` verwijst door naar `/studio#data`; er is geen tweede app of grafiekbibliotheek nodig.
+
+Alle dashboards gebruiken `lib/bi/model.ts`, dezelfde datasets en dezelfde renderer/editor. Een grafiek hoort bij één dashboard; een kopie kan worden toegevoegd aan een ander dashboard en blijft dezelfde bron/formules gebruiken. Een bronwijziging rekent door in alle afhankelijke dashboards. Dit blijft een browserlokale BI-kern, geen volledige Power BI-, Excel- of DAX-implementatie.
+
+## Bestaande opslag en AI
+
+`lib/bi/studio.ts` neemt `irixs-data-studio-v1` (tabellen, formules, relaties en rapporten) en `irixs-dashboard-studio-v1` (bewaarde dashboards) samen over. Titels, filters, gedeeldstatus, rijen en formules blijven behouden. De nieuwe opslag heet `irixs-studio-v2`; oude sleutels worden niet verwijderd of overschreven. Mislukte conversies worden gemeld. De klantdemo gebruikt afzonderlijk `irixs-studio-customer-v2` en leest geen interne imports.
+
+AI-uitvoer wordt naar hetzelfde dashboard-/grafiekmodel vertaald. Jaarvergelijkingen, groei, positieve-omzetklanten en gewogen percentages hebben regressietests tegen de oorspronkelijke rekenregels. AI-vervolgopdrachten gebruiken de actuele instellingen; als het dashboard buiten het beperkte AI-contract valt (bijvoorbeeld eigen bronnen of spreiding), blijft handmatig bewerken beschikbaar en wordt geen onvolledige oude kopie verstuurd. PURE-vragen gebruiken expliciet een planningtemplate, geen vermeende externe AI-analyse. Geïmporteerde records gaan niet naar AI.
 
 ## Wat werkt
 
@@ -38,19 +46,19 @@ Er zijn twee verschillende berekeningsniveaus:
 
 ## Demo doorlopen
 
-1. Open Data Studio → PURE planning. Bekijk benodigd, ingepland, openstaand en meer dan behoefte.
-2. Gegevens → PURE vrije bestandsregels. Verhoog op regel 4 de behoefte van 20 naar 28 en verlaat de cel. In het rapport stijgen benodigde én openstaande uren met 8, planning blijft gelijk.
+1. Open Irixs Studio → Dashboards → PURE planning & behoefte. Bekijk benodigd, ingepland, openstaand en meer dan behoefte.
+2. Onderliggende data → PURE vrije bestandsregels. Verhoog op regel 4 de behoefte van 20 naar 28 en verlaat de cel. Terug naar het dashboard: benodigde én openstaande uren stijgen met 8, planning blijft gelijk.
 3. Klik in ‘Openstaande uren per functie’ op Engineer. De andere grafieken en medewerkerslijst filteren mee. Wis de selectie om alles te zien.
 4. Formules → PURE-bron: voeg ‘Uren met opslag’ toe met `ROUND([amount] * 1.1; 2)`. Bekijk de berekende, grijze tabelkolom.
-5. Financiën → omzet versus budget. Bewerk de grafiek of kies een andere bron/maatstaf. Een gewogen KPI kan via ‘Formule over totalen’ worden toegevoegd.
-6. Importeer een eigen klein bestand, kies Eigen analyse en voeg een grafiek toe. Kies zelf dimensie, waarde en eventueel een tweede reeks/bron. De fixture `scripts/fixtures/bi-qa.csv` bevat uitsluitend fictieve QA-data.
+5. Dashboards → Resultaat & budget → Dashboard bewerken. Bewerk de grafiek of kies een andere bron/maatstaf. Een gewogen KPI kan via ‘Formule over totalen’ worden toegevoegd.
+6. Importeer een eigen klein bestand en voeg vanuit de tabel een grafiek toe aan het geopende dashboard, of maak een leeg dashboard. Kies dimensie, waarde en eventueel een tweede reeks/bron. Een bestaande grafiek kan vanuit de dashboardeditor worden gekopieerd. De fixture `scripts/fixtures/bi-qa.csv` bevat uitsluitend fictieve QA-data.
 7. Sla op, herlaad en controleer de waarden, formules en grafiekinstellingen. Download voor overdracht een JSON-back-up.
 
 ## Grenzen en richting productie
 
-Data Studio verstuurt geen geïmporteerde records naar Groq/een AI-provider of AFAS. Bewerken is **lokaal muteren**, niet een AFAS UpdateConnector aanroepen. De nieuwe route is voor de interne Toolbox-sessie; de beperkte klantdemo-sessie blijft server-side uitgesloten. Er is geen gedeelde database, multi-user-samenwerking, rijautorisatie, automatische live verversing, transactionele rollback of AFAS-post.
+Studio verstuurt geen geïmporteerde records naar Groq/een AI-provider of AFAS. Bewerken is **lokaal muteren**, niet een AFAS UpdateConnector aanroepen. De datamodel-interface is alleen zichtbaar in de interne Toolbox-sessie. De beperkte klantdemo blijft server-side uitgesloten van `/internal`, `/studio/data` en interne API’s; haar opslag is bovendien gescheiden. Demoprofielen zijn geen echte autorisatie. Er is geen gedeelde database, multi-user-samenwerking, rijautorisatie, automatische live verversing, transactionele rollback of AFAS-post.
 
-Een werkplek is beperkt tot 16 bronnen, 16 visuals en 2 miljoen JSON-tekens. Opslagquota worden gemeld; maak voor belangrijke eigen gegevens een JSON-back-up. Voor een productieplatform zijn ten minste beheerde tenantopslag, identiteit/rollen, bronadapters, mapping, refresh, audit/versies en gecontroleerde terugschrijfopdrachten nodig. AFAS-mutaties moeten daarna per connector, veld en bevoegdheid worden ingericht en vóór verzending controleerbaar zijn. Prijs- of abonnementslogica per dataset/maand is bewust niet toegevoegd.
+Een Studio is beperkt tot 16 bronnen, 20 dashboards, 24 componenten per dashboard, 240 componenten totaal en 2 miljoen JSON-tekens. Opslagquota worden gemeld; maak voor belangrijke eigen gegevens een JSON-back-up. Voor een productieplatform zijn ten minste beheerde tenantopslag, identiteit/rollen, bronadapters, mapping, refresh, audit/versies en gecontroleerde terugschrijfopdrachten nodig. AFAS-mutaties moeten daarna per connector, veld en bevoegdheid worden ingericht en vóór verzending controleerbaar zijn. Prijs- of abonnementslogica per dataset/maand is bewust niet toegevoegd.
 
 ## Verificatie
 

@@ -47,18 +47,11 @@ export function ToolboxLanding({ connectorCount }: { connectorCount: number }) {
       status: "Demo / POC", audiences: ["demo"],
     },
     {
-      title: "Data Studio",
-      description: "Bewerk brongegevens, maak formules en vergelijk planning, behoefte en resultaten in interactieve grafieken.",
-      detail: "PURE-demodata · eigen bestanden · relaties · berekende velden",
-      href: "/studio/data", action: "Open Data Studio", icon: "grid",
-      status: "Interne demo", audiences: ["internal", "demo"],
-    },
-    {
-      title: "Dashboard Studio",
-      description: "Van een vraag naar een bewerkbaar dashboard. Verken KPI’s, grafieken, filters en de controles erachter.",
-      detail: "Fictieve cijfers · dashboards bewaard in deze browser",
-      href: "/studio", action: "Open Dashboard Studio", icon: "chart",
-      status: "Demo / POC", audiences: ["demo"],
+      title: "Irixs Studio",
+      description: "Bekijk en bouw dashboards voor planning, behoefte, financiën en eigen analyses. Met AI of zelf, op hetzelfde datamodel.",
+      detail: "Dashboards · tabellen · relaties · formules · lokale opslag",
+      href: "/studio", action: "Open Irixs Studio", icon: "chart",
+      status: "Demo / POC", audiences: ["internal", "demo"],
     },
     {
       title: "Knowledge & Data Engineer",

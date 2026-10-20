@@ -1,21 +1,23 @@
-# Irixs Dashboard Studio & Knowledge Engine
+# Irixs Studio & Knowledge Engine
+
+Dashboard Studio en Data Studio zijn samengevoegd in één `/studio`, met één opslag- en rekenmodel. Zie [de actuele werkwijze en migratie](data-studio.md). De financiële AI-catalogus hieronder blijft het beperkte API-contract; PURE, eigen bronnen en uitgebreide vergelijkingen gebruiken dezelfde handmatige dashboardeditor.
 
 ## Demo doorlopen
 
 1. Open `/studio` via de Toolbox. Kies **Maken met AI**, gebruik het omzetvoorbeeld en klik **Genereer dashboard**.
 2. De echte Knowledge Engine-controles verschijnen: vraag, bestaande AFAS-schemabank, demobron, velden, KPI-definities en dashboardcomponenten. Dit zijn resultaten van uitgevoerde controles; bij uitgeschakelde/niet-beschikbare AI staat er expliciet **Demo-interpreter**.
-3. Selecteer een componenttitel. Verander titel, KPI, groepering, grafiektype, breedte of jaarvergelijking. Voeg componenten toe via de bibliotheek. Gebruik slepen of pijltjes voor de volgorde; verwijder met het kruisje.
+3. Open Dashboard bewerken en de instellingenknop bij een component. Verander titel, waarde, groepering, grafiektype, breedte of jaarvergelijking. Voeg componenten toe of kopieer een grafiek uit een ander dashboard. Gebruik pijltjes voor de volgorde; verwijder met het kruisje.
 4. Vraag in de editor: ‘Verander de maandgrafiek naar een lijndiagram en voeg een KPI voor groei ten opzichte van vorig jaar toe’. Bestaande widget-id's, filters en handmatige titels blijven behouden. Onbekende KPI's/velden worden geweigerd.
-5. **Opslaan** bewaart de configuratie in deze browser. Open **Voorbeeld** voor de schone kijkmodus. Keer terug naar het overzicht; herladen en opnieuw openen behouden het dashboard. Filters rekenen door in KPI's, grafieken en tabellen.
+5. **Opslaan** bewaart de hele Studio in deze browser, inclusief data en model. Open **Bekijken** voor de schone kijkmodus. Herladen en opnieuw openen behouden het dashboard. Filters rekenen door in KPI's, grafieken en tabellen.
 6. Vink **Beschikbaar voor democollega** aan en sla op. De demoprofielkeuze **Collega** toont alleen gedeelde en eigen dashboards. Dit is een browserlokale deelsimulatie, geen uitnodiging of productie-rollenbeheer.
 7. Genereer een verzuimdashboard. De klant krijgt een begrijpelijke melding over ontbrekende data. Het verzoek staat browserlokaal klaar in `/internal` → **Data Engineer**. Er wordt geen supportbericht verstuurd.
 8. Laat intern ook het CRM-voorbeeld analyseren. Het voorstel noemt alleen connectoren en velden die in de bestaande officiële schema's zijn gevonden. Leesconnector/GGV, matching en nummerbeleid blijven te bevestigen voorstellen. De interne analyse gebruikt een beperkte, deterministische metadata-analyse en doet geen live mutaties.
-9. **Mijn databronnen** kan een demobron uitschakelen en verversen simuleren. Uitgeschakelde bronnen verhinderen dashboardgeneratie en rendering. Een gesimuleerde verversing toont het tijdstip als simulatie en wijzigt de fictieve cijfers niet.
+9. **Databronnen** kan financiële/uren-demobronnen uitschakelen. Dit verhindert de betreffende dashboardgeneratie en rendering. Er wordt geen live verversing voorgesteld; nieuwe exports worden expliciet geïmporteerd.
 10. Start **Klantdemo starten** vanuit een interne studiosessie. Dit vervangt de interne sessie door een beperkter ondertekend sessietoken. Interne routes/API's en de andere Toolbox-API's zijn dan server-side geblokkeerd. Om intern terug te keren is opnieuw inloggen via `/login?next=/internal` nodig.
 
 ## Wat daadwerkelijk werkt
 
-- Drie voorbeelddashboards en een leeg canvas; de editor heeft geen AI nodig.
+- Vijf startdashboards, inclusief PURE planning/behoefte en resultaat/budget, en een leeg canvas; de editor heeft geen AI nodig.
 - Lokale, deterministische financiële en projecturenrecords voor 2024–2026; dashboardselectie 2025/2026 met vergelijkingsperioden. Ook toekomstige maanden zijn expliciet fictieve demonstratiedata.
 - Gedeelde catalogus met datasetcontracten, dimensies en acht KPI-definities. Marge en declarabiliteit zijn gewogen; groei vergelijkt dezelfde maanden/administratie met vorig jaar. Bij een nulnoemer verschijnt geen verzonnen percentage.
 - Gevalideerde JSON-dashboardconfiguraties. AI genereert geen HTML, JavaScript, SQL of componentcode.

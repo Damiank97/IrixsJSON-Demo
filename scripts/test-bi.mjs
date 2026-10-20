@@ -7,7 +7,7 @@ import {createRequire} from "node:module";
 import ts from "typescript";
 const native=createRequire(import.meta.url),cache=new Map();
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);const require=id=>id.startsWith("@/")?load(`${id.slice(2)}.ts`):id.startsWith(".")?load(path.resolve(path.dirname(file),`${id}.ts`)):native(id);vm.runInNewContext(ts.transpileModule(readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,{exports,require,crypto,structuredClone,console,Intl,Date,setTimeout,URL,Blob});return exports;}
-const f=load("lib/bi/formula.ts"),m=load("lib/bi/model.ts"),files=load("lib/bi/files.ts");
+const f=load("lib/bi/formula.ts"),m=load("lib/bi/model.ts"),files=load("lib/bi/files.ts"),studio=load("lib/bi/studio.ts"),planner=load("lib/studio/planner.ts"),oldModel=load("lib/studio/model.ts"),analytics=load("lib/studio/analytics.ts");
 test("veilige formules hebben rekenvolgorde, luie IF, Nederlandse functies en nulcontrole",()=>{
   for(const [input,want] of [["2+3*4",14],["-2^2",-4],["2^3^2",512],["ALS([n]=0; 8; 1/[n])",8],["AFRONDEN(10/3;2)",3.33],["IF([kind]=\"Behoefte\";1;0)",1]])assert.equal(f.compileFormula(input).evaluate({n:0,kind:"Behoefte"}),want);
   assert.equal(f.compileFormula("1/0").evaluate({}),null);assert.equal(f.compileFormula("[missing]+4").evaluate({}),null);
@@ -71,4 +71,55 @@ test("vergelijkingsvelden kunnen verschillend heten; gekoppelde selectie vertaal
   const visual={id:"paired",title:"Gekoppelde groepen",source:"finance",dimension:"customer",measure:{field:"revenue",aggregation:"sum"},compare:{source:extra.id,dimension:"naam",measure:{field:"waarde",aggregation:"sum"}},kind:"table",top:20};
   const result=m.visualData(w,visual,{year:"all",administration:"all",selection:{field:"customer",value:"Atlas Groep"}});
   assert.equal(result.points.length,1);assert.equal(result.points[0].comparison,50);
+});
+
+test("één Studio neemt beide oude opslagen over zonder de originelen te schrijven",()=>{
+  const bi=m.demoWorkspace(),old=planner.demoDashboards();
+  bi.datasets.find(d=>d.id==="pure").rows[0].values.amount=99;
+  bi.datasets.find(d=>d.id==="finance").columns.push({id:"extra",label:"Eigen formule",type:"number",formula:"[profit]*2"});
+  old[0].title="Mijn bewaarde dashboard";old[0].widgets[0].title="Handmatige KPI-titel";
+  const data=new Map([[m.BI_STORAGE,JSON.stringify(bi)],[oldModel.STUDIO_STORAGE,JSON.stringify(old)]]),snapshot=JSON.stringify([...data]);
+  const loaded=studio.loadStudio({getItem:key=>data.get(key)??null},true),w=loaded.workspace;
+  assert.equal(w.dashboards.length,5);assert.ok(loaded.migrated);assert.equal(w.datasets.find(d=>d.id==="pure").rows[0].values.amount,99);
+  assert.equal(w.datasets.find(d=>d.id==="finance").columns.at(-1).id,"extra");assert.equal(w.dashboards.find(d=>d.id===old[0].id).title,old[0].title);
+  assert.ok(w.visuals.some(v=>v.title==="Handmatige KPI-titel"));assert.equal(JSON.stringify([...data]),snapshot);
+  const reloaded=studio.loadStudio({getItem:key=>key===studio.UNIFIED_STORAGE?JSON.stringify(w):data.get(key)??null},true).workspace;
+  assert.equal(reloaded.visuals.length,w.visuals.length);assert.equal(reloaded.dashboards.length,w.dashboards.length);
+});
+
+test("oude KPI’s en vorig-jaar vergelijkingen behouden hun betekenis in de gedeelde grafiekkern",()=>{
+  let w=studio.defaultStudio();
+  for(const dataset of ["revenue","hours"]){const d=planner.makeDashboard(dataset);d.filters={year:2025,administration:oldModel.ADMINS[0],fromMonth:2,toMonth:7};d.widgets=Object.entries(oldModel.METRICS).filter(([,m])=>m.dataset===dataset).map(([metric])=>({...oldModel.newWidget(metric,"line","month"),compare:true}));w=studio.addDashboard(w,d);
+    for(const widget of d.widgets){const visual=w.visuals.find(v=>v.id===`${d.id}::${widget.id}`),actual=m.visualData(w,visual,{...d.filters,year:String(d.filters.year)}),before=analytics.widgetData(d,widget);
+      assert.ok(Math.abs(actual.total-before.value)<1e-8,widget.metric);assert.ok(Math.abs(actual.comparison-before.previous)<1e-8,`${widget.metric} prior`);
+      for(let i=0;i<before.series.length;i++){assert.ok(Math.abs(actual.points[i].value-before.series[i].value)<1e-8,`${widget.metric} group`);assert.ok(Math.abs(actual.points[i].comparison-before.series[i].previous)<1e-8,`${widget.metric} prior group`);}
+    }
+  }
+});
+
+test("bewerkte brongegevens voeden zowel gemigreerde dashboards als eigen analyses",()=>{
+  const w=studio.defaultStudio(),board=w.dashboards.find(b=>b.id==="demo-omzet"),visual=w.visuals.find(v=>v.page===board.id&&v.measure.field==="revenue"&&v.kind==="kpi"),filters={year:"2026",administration:"all"};
+  const row=w.datasets.find(d=>d.id==="finance").rows.find(r=>r.values.year===2026),before=m.visualData(w,visual,filters).total,next=m.editCell(w,"finance",row.id,"revenue",String(row.values.revenue+123));
+  assert.equal(m.visualData(next,visual,filters).total,before+123);
+  const budget=w.visuals.find(v=>v.id==="bi-month");assert.equal(m.visualData(next,budget,filters).total-m.visualData(w,budget,filters).total,123);
+});
+
+test("AI-vervolgopdrachten gebruiken actuele instellingen, behouden ids en weigeren onveilige contractvertaling",()=>{
+  const w=studio.defaultStudio(),board=w.dashboards.find(b=>b.id==="demo-omzet"),legacy=studio.toDashboard(w,board);assert.ok(legacy);
+  legacy.widgets[0].title="Mijn nieuwe titel";
+  const changed=studio.addDashboard(w,legacy);assert.equal(changed.visuals.find(v=>v.id===legacy.widgets[0].id).title,"Mijn nieuwe titel");
+  assert.equal(studio.toDashboard(changed,board).widgets[0].id,legacy.widgets[0].id);
+  changed.visuals.find(v=>v.page===board.id).kind="scatter";assert.equal(studio.toDashboard(changed,board),null);
+});
+
+test("klantdemo leest geen interne imports of oude interne opslag",()=>{
+  const reads=[],loaded=studio.loadStudio({getItem:key=>{reads.push(key);return null;}},false);
+  assert.equal(reads.length,1);assert.equal(reads[0],studio.CUSTOMER_STORAGE);assert.equal(loaded.workspace.datasets.some(d=>d.origin==="import"),false);
+});
+
+test("nieuwe opslag en back-ups weigeren verweesde grafieken en te veel componenten",()=>{
+  const w=studio.defaultStudio();w.visuals[0].page="niet-bestaand";assert.throws(()=>studio.validateStudio(w),/bestaand/);
+  const many=studio.defaultStudio(),v=many.visuals[0];many.visuals.push(...Array.from({length:25},(_,i)=>({...v,id:`extra-${i}`})));assert.throws(()=>studio.validateStudio(many),/dashboard/);
+  const converted=studio.importStudio(m.demoWorkspace());assert.ok(converted.dashboards.some(b=>b.id==="planning"));
+  const f={year:"all",administration:"all"},growth=studio.defaultStudio().visuals.find(v=>v.measure.aggregation==="growth");assert.throws(()=>m.visualData(studio.defaultStudio(),growth,f),/één jaar/);
 });

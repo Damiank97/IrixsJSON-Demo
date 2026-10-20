@@ -5,15 +5,16 @@ export type Column = { id:string; label:string; type:"number"|"text"|"boolean"; 
 export type RecordRow = { id:string; values:Record<string,Cell> };
 export type Dataset = { id:string; name:string; origin:"demo"|"import"|"derived"; columns:Column[]; rows:RecordRow[]; view?:{source:string;field:string;value:Cell}; derive?:{groupBy:string[];left:{source:string;measure:Measure;output:string};right:{source:string;measure:Measure;output:string}} };
 export type Relation = { id:string; from:string; to:string; pairs:{from:string;to:string}[] };
-export type Measure = { field:string; aggregation:"sum"|"average"|"count"|"distinct"|"min"|"max"|"formula"; expression?:string; format?:Column["format"] };
-export type Visual = { id:string; title:string; source:string; dimension:string; measure:Measure; kind:"kpi"|"bar"|"line"|"area"|"table"|"scatter"; compare?:{source:string;measure:Measure;dimension?:string}; top:number; page?:"planning"|"finance"|"custom";width?:"half"|"full" };
+export type Measure = { field:string; aggregation:"sum"|"average"|"count"|"distinct"|"min"|"max"|"formula"|"growth"; expression?:string; format?:Column["format"]; positiveOnly?:string };
+export type Visual = { id:string; title:string; source:string; dimension:string; measure:Measure; kind:"kpi"|"bar"|"line"|"area"|"table"|"scatter"; compare?:{source:string;measure:Measure;dimension?:string;period?:"previousYear"}; top:number; page?:string;width?:"half"|"full" };
 export type Edit = { id:string; dataset:string; row:string; column:string; before:Cell; after:Cell; at:string };
 export type Workspace = { version:1; name:string; datasets:Dataset[]; relations:Relation[]; visuals:Visual[]; edits:Edit[]; savedAt:string|null };
-export type Filters = { year:string; administration:string; selection?:{field:string;value:Cell;year?:number} };
+export type Filters = { year:string; administration:string; fromMonth?:number; toMonth?:number; selection?:{field:string;value:Cell;year?:number} };
 export const BI_STORAGE="irixs-data-studio-v1";
 
 export function demoWorkspace():Workspace {
-  const financial=demoRows("revenue").filter(r=>r.year>=2025),hours=demoRows("hours").filter(r=>r.year>=2025);
+  // Keep the original 2025/26 row ids stable; append history for prior-year KPIs.
+  const financial=[...demoRows("revenue").filter(r=>r.year>=2025),...demoRows("revenue").filter(r=>r.year===2024)],hours=[...demoRows("hours").filter(r=>r.year>=2025),...demoRows("hours").filter(r=>r.year===2024)];
   const clients=[...new Set(financial.map(r=>r.customer))];
   const money=(id:string,label:string):Column=>({id,label,type:"number",format:"currency"});
   const period:Column[]=[{id:"year",label:"Jaar",type:"number"},{id:"month",label:"Maand",type:"number"},{id:"administration",label:"Administratie",type:"text"}];
@@ -110,9 +111,14 @@ export function filterRows(rows:RecordRow[],columns:Column[],filters:Filters,str
   const has=(id:string)=>columns.some(c=>c.id===id);
   if(strict&&filters.selection&&!has(filters.selection.field))throw new Error("Deze bron bevat het geselecteerde filterveld niet. Wis de grafiekselectie om deze vergelijking te bekijken.");
   if(strict&&filters.selection?.year!==undefined&&!has("year"))throw new Error("Deze bron mist het jaar van de grafiekselectie. Wis de selectie om verder te gaan.");
-  return rows.filter(r=>(filters.year==="all"||!has("year")||String(r.values.year)===filters.year)&&(filters.administration==="all"||!has("administration")||r.values.administration===filters.administration)&&(!filters.selection||!has(filters.selection.field)||r.values[filters.selection.field]===filters.selection.value&&(filters.selection.year===undefined||r.values.year===filters.selection.year)));
+  return rows.filter(r=>(filters.year==="all"||!has("year")||String(r.values.year)===filters.year)&&(filters.administration==="all"||!has("administration")||r.values.administration===filters.administration)&&(!has("month")||Number(r.values.month)>=(filters.fromMonth??1)&&Number(r.values.month)<=(filters.toMonth??12))&&(!filters.selection||!has(filters.selection.field)||r.values[filters.selection.field]===filters.selection.value&&(filters.selection.year===undefined||r.values.year===filters.selection.year)));
 }
-export function aggregate(rows:RecordRow[],measure:Measure):number|null {
+export function aggregate(rows:RecordRow[],measure:Measure,previous:RecordRow[]=[]):number|null {
+  if(measure.positiveOnly)rows=rows.filter(r=>typeof r.values[measure.positiveOnly!]==="number"&&Number(r.values[measure.positiveOnly!])>0);
+  if(measure.aggregation==="growth"){
+    const before=aggregate(previous,{field:measure.field,aggregation:"sum"}),now=aggregate(rows,{field:measure.field,aggregation:"sum"});
+    return before&&now!==null?(now-before)/before*100:null;
+  }
   if(measure.aggregation==="formula"){
     const formula=compileFormula(measure.expression??""),totals:Record<string,Cell>={};
     for(const field of formula.fields)totals[field]=aggregate(rows,{field,aggregation:"sum"});
@@ -129,20 +135,32 @@ export type Point={key:string;label:string;raw:Cell;value:number|null;comparison
 export function visualData(workspace:Workspace,visual:Visual,filters:Filters):{points:Point[];primary:Column;secondary?:Column;total:number|null;comparison:number|null} {
   const leftColumns=modelColumns(workspace,visual.source),primaryColumn=leftColumns.find(c=>c.id===visual.measure.field),primary=primaryColumn?{...primaryColumn,format:visual.measure.format??(["count","distinct"].includes(visual.measure.aggregation)?"number":primaryColumn.format)}:undefined;
   if(!primary||!leftColumns.some(c=>c.id===visual.dimension))throw new Error("Kies een bestaand groeperingsveld en waardekolom.");
-  const left=filterRows(modelRows(workspace,visual.source),leftColumns,filters),rightColumns=visual.compare?modelColumns(workspace,visual.compare.source):[];
+  const needsYear=visual.measure.aggregation==="growth"||visual.compare?.measure.aggregation==="growth"||visual.compare?.period==="previousYear";
+  if(needsYear&&(filters.year==="all"||!leftColumns.some(c=>c.id==="year")))throw new Error("Kies één jaar voor groei of vergelijking met vorig jaar.");
+  const priorFilters=(f:Filters,offset=1):Filters=>({...f,year:String(Number(f.year)-offset),selection:f.selection?.year!==undefined?{...f.selection,year:f.selection.year-offset}:f.selection});
+  const allLeft=modelRows(workspace,visual.source),left=filterRows(allLeft,leftColumns,filters),previousLeft=needsYear?filterRows(allLeft,leftColumns,priorFilters(filters)):[],rightColumns=visual.compare?modelColumns(workspace,visual.compare.source):[];
   const rightDimension=visual.compare?.dimension??visual.dimension;
   const secondaryColumn=visual.compare?rightColumns.find(c=>c.id===visual.compare!.measure.field):undefined,secondary=secondaryColumn?{...secondaryColumn,format:visual.compare?.measure.format??(["count","distinct"].includes(visual.compare!.measure.aggregation)?"number":secondaryColumn.format)}:undefined;
   if(visual.compare&&(!secondary||!rightColumns.some(c=>c.id===rightDimension)))throw new Error("De vergelijkingsbron mist de gekozen groepering of waardekolom. Koppel een passend groeperingsveld voor reeks B.");
   if(visual.compare&&leftColumns.find(c=>c.id===visual.dimension)!.type!==rightColumns.find(c=>c.id===rightDimension)!.type)throw new Error("De groeperingsvelden hebben verschillende datatypen en kunnen niet veilig worden vergeleken.");
   for(const filter of [{field:"year",active:filters.year!=="all"},{field:"administration",active:filters.administration!=="all"}])if(visual.compare&&filter.active&&leftColumns.some(c=>c.id===filter.field)!==rightColumns.some(c=>c.id===filter.field))throw new Error("Beide bronnen moeten het actieve periode-/administratiefilter ondersteunen. Zet dat filter op ‘Alles’ of kies een andere bron.");
   const rightFilters=filters.selection?.field===visual.dimension?{...filters,selection:{...filters.selection,field:rightDimension}}:filters;
-  const right=visual.compare?filterRows(modelRows(workspace,visual.compare.source),rightColumns,rightFilters):[];
+  const compareFilters=visual.compare?.period==="previousYear"?priorFilters(rightFilters):rightFilters;
+  const allRight=visual.compare?modelRows(workspace,visual.compare.source):[];
+  const right=visual.compare?filterRows(allRight,rightColumns,compareFilters):[];
+  const previousRight=visual.compare?.measure.aggregation==="growth"?filterRows(allRight,rightColumns,priorFilters(compareFilters)):[];
   const groups=(records:RecordRow[],dimension:string)=>{const map=new Map<string,{raw:Cell;rows:RecordRow[]}>();for(const row of records){const raw=row.values[dimension]??null;const period=visual.dimension==="month"&&row.values.year!==undefined?`${row.values.year}-${String(raw).padStart(2,"0")}`:String(raw??"(leeg)");const entry=map.get(period)??{raw,rows:[]};entry.rows.push(row);map.set(period,entry);}return map;};
   // Aggregate each fact source first. Never join raw fact rows for comparisons.
-  const a=groups(left,visual.dimension),b=groups(right,rightDimension),keys=[...new Set([...a.keys(),...b.keys()])];
-  let points=keys.map(key=>{const l=a.get(key),r=b.get(key),value=l?aggregate(l.rows,visual.measure):null,comparison=r&&visual.compare?aggregate(r.rows,visual.compare.measure):null,delta=value!==null&&comparison!==null?value-comparison:null;return {key,label:key,raw:l?.raw??r?.raw??null,value,comparison,delta,percent:delta!==null&&comparison!==null&&comparison!==0?delta/Math.abs(comparison)*100:null};});
+  const shift=(records:RecordRow[],offset=1)=>records.map(r=>({...r,values:{...r.values,year:Number(r.values.year)+offset}}));
+  const a=groups(left,visual.dimension),b=groups(visual.compare?.period==="previousYear"?shift(right):right,rightDimension),pa=groups(shift(previousLeft),visual.dimension),pb=groups(shift(previousRight,visual.compare?.period==="previousYear"?2:1),rightDimension),keys=[...new Set([...a.keys(),...b.keys()])];
+  let points=keys.map(key=>{const l=a.get(key),r=b.get(key),value=l?aggregate(l.rows,visual.measure,pa.get(key)?.rows):null,comparison=r&&visual.compare?aggregate(r.rows,visual.compare.measure,pb.get(key)?.rows):null,delta=value!==null&&comparison!==null?value-comparison:null;return {key,label:key,raw:l?.raw??r?.raw??null,value,comparison,delta,percent:delta!==null&&comparison!==null&&comparison!==0?delta/Math.abs(comparison)*100:null};});
   points=["month","year","week","date"].includes(visual.dimension)?points.sort((x,y)=>x.key.localeCompare(y.key,undefined,{numeric:true})):points.sort((x,y)=>(y.value??-Infinity)-(x.value??-Infinity));
-  return {points:points.slice(0,visual.top),primary:primary as Column,secondary:secondary as Column|undefined,total:aggregate(left,visual.measure),comparison:visual.compare?aggregate(right,visual.compare.measure):null};
+  if(primary&&visual.measure.aggregation==="formula")primary.label=visual.title;
+  if(primary&&visual.measure.aggregation==="growth"){primary.label="Groei t.o.v. vorig jaar";primary.format="percent";}
+  if(secondary&&visual.compare?.measure.aggregation==="formula")secondary.label=visual.title;
+  if(secondary&&visual.compare?.measure.aggregation==="growth"){secondary.label="Groei t.o.v. vorig jaar";secondary.format="percent";}
+  if(secondary&&visual.compare?.period==="previousYear")secondary.label=`${secondary.label} · vorig jaar`;
+  return {points:points.slice(0,visual.top),primary:primary as Column,secondary:secondary as Column|undefined,total:aggregate(left,visual.measure,previousLeft),comparison:visual.compare?aggregate(right,visual.compare.measure,previousRight):null};
 }
 export function formatValue(value:Cell|undefined,column?:Pick<Column,"format">):string {
   if(value===null||value===undefined)return "—";if(typeof value==="boolean")return value?"Ja":"Nee";if(typeof value!=="number")return value;
@@ -165,7 +183,7 @@ export function editCell(workspace:Workspace,datasetId:string,rowId:string,colum
 }
 export function validateWorkspace(value:unknown):Workspace {
   if(!value||typeof value!=="object")throw new Error("Ongeldige werkplek.");const w=value as Workspace;
-  if(w.version!==1||typeof w.name!=="string"||!w.name.trim()||w.name.length>100||!Array.isArray(w.datasets)||!w.datasets.length||w.datasets.length>16||!Array.isArray(w.relations)||w.relations.length>20||!Array.isArray(w.visuals)||w.visuals.length>16||!Array.isArray(w.edits)||w.edits.length>500)throw new Error("Ongeldige werkplekstructuur.");
+  if(w.version!==1||typeof w.name!=="string"||!w.name.trim()||w.name.length>100||!Array.isArray(w.datasets)||!w.datasets.length||w.datasets.length>16||!Array.isArray(w.relations)||w.relations.length>20||!Array.isArray(w.visuals)||w.visuals.length>240||!Array.isArray(w.edits)||w.edits.length>500)throw new Error("Ongeldige werkplekstructuur.");
   if(JSON.stringify(w).length>2_000_000)throw new Error("Deze lokale werkplek is te groot om veilig te bewaren (maximaal 2 miljoen tekens). Splits grote bronnen over meerdere JSON-back-ups.");
   const ids=new Set<string>();for(const d of w.datasets){if(typeof d.id!=="string"||!d.id||ids.has(d.id)||typeof d.name!=="string"||d.name.length>100||!["demo","import","derived"].includes(d.origin)||!Array.isArray(d.columns)||!d.columns.length||d.columns.length>80||!Array.isArray(d.rows)||d.rows.length>5000)throw new Error("Ongeldige gegevensbron (maximaal 5.000 regels en 80 kolommen).");ids.add(d.id);const cols=new Set<string>();for(const c of d.columns){if(!c||typeof c.id!=="string"||!c.id||cols.has(c.id)||typeof c.label!=="string"||!["number","text","boolean"].includes(c.type)||c.formula!==undefined&&typeof c.formula!=="string")throw new Error("Ongeldige kolom.");cols.add(c.id);}const rowIds=new Set<string>();for(const r of d.rows){if(!r||typeof r.id!=="string"||rowIds.has(r.id)||!r.values||typeof r.values!=="object")throw new Error("Ongeldige regel.");rowIds.add(r.id);for(const [key,v] of Object.entries(r.values)){if(!cols.has(key)||!(v===null||typeof v==="string"&&v.length<=10000||typeof v==="boolean"||typeof v==="number"&&Number.isFinite(v)))throw new Error("Ongeldige celwaarde.");}}}
   if(w.savedAt!==null&&(typeof w.savedAt!=="string"||!Number.isFinite(Date.parse(w.savedAt))))throw new Error("Ongeldig opslagmoment.");
@@ -173,8 +191,8 @@ export function validateWorkspace(value:unknown):Workspace {
   for(const d of w.datasets){for(const c of d.columns)if(["__proto__","constructor","prototype"].includes(c.id)||c.label.length>100||c.format!==undefined&&!["currency","percent","number"].includes(c.format))throw new Error("Ongeldige kolomnaam of getalopmaak.");if(d.origin==="derived"&&Boolean(d.view)===Boolean(d.derive)||d.origin!=="derived"&&(d.view||d.derive))throw new Error("Een afgeleide bron vereist precies één afleidingsregel.");for(const row of d.rows)for(const column of d.columns){const cell=row.values[column.id];if(cell!==null&&cell!==undefined&&!column.formula&&typeof cell!==(column.type==="text"?"string":column.type))throw new Error(`Celtype past niet bij kolom ${column.label}.`);}}
   const relationIds=new Set<string>();for(const r of w.relations){if(!r||typeof r.id!=="string"||relationIds.has(r.id)||!Array.isArray(r.pairs)||relationDiagnostics(w,r).duplicates)throw new Error("Ongeldige of dubbelzinnige relatie.");relationIds.add(r.id);}
   for(const d of w.datasets){if(d.view&&(!w.datasets.some(s=>s.id===d.view!.source)||!w.datasets.find(s=>s.id===d.view!.source)!.columns.some(c=>c.id===d.view!.field)))throw new Error("Ongeldige afgeleide selectie.");if(d.derive){const derive=d.derive;for(const side of [derive.left,derive.right]){const columns=modelColumns(w,side.source);if(!validMeasure(side.measure,columns)||!d.columns.some(c=>c.id===side.output)||!derive.groupBy.length||derive.groupBy.some(f=>!columns.some(c=>c.id===f)))throw new Error("Ongeldige afgeleide vergelijking.");}}orderedFormulas(d.columns,modelColumns(w,d.id));modelRows(w,d.id);}
-  const visualIds=new Set<string>();for(const v of w.visuals){const fields=modelColumns(w,v.source);if(typeof v.id!=="string"||visualIds.has(v.id)||typeof v.title!=="string"||!v.title.trim()||v.title.length>100||v.page!==undefined&&!["planning","finance","custom"].includes(v.page)||v.width!==undefined&&!["half","full"].includes(v.width)||!["kpi","bar","line","area","table","scatter"].includes(v.kind)||!fields.some(c=>c.id===v.dimension)||!validMeasure(v.measure,fields)||!Number.isInteger(v.top)||v.top<1||v.top>50||v.compare&&!validMeasure(v.compare.measure,modelColumns(w,v.compare.source)))throw new Error("Ongeldige grafiekinstelling.");visualIds.add(v.id);}
+  const visualIds=new Set<string>();for(const v of w.visuals){const fields=modelColumns(w,v.source);if(typeof v.id!=="string"||visualIds.has(v.id)||typeof v.title!=="string"||!v.title.trim()||v.title.length>100||v.page!==undefined&&(typeof v.page!=="string"||!v.page||v.page.length>100)||v.width!==undefined&&!["half","full"].includes(v.width)||!["kpi","bar","line","area","table","scatter"].includes(v.kind)||!fields.some(c=>c.id===v.dimension)||!validMeasure(v.measure,fields)||!Number.isInteger(v.top)||v.top<1||v.top>50||v.compare&&(!validMeasure(v.compare.measure,modelColumns(w,v.compare.source))||v.compare.period!==undefined&&v.compare.period!=="previousYear"||v.compare.dimension!==undefined&&!modelColumns(w,v.compare.source).some(c=>c.id===v.compare!.dimension)))throw new Error("Ongeldige grafiekinstelling.");visualIds.add(v.id);}
   return w;
 }
 function validCell(value:unknown) {return value===null||typeof value==="string"&&value.length<=10000||typeof value==="boolean"||typeof value==="number"&&Number.isFinite(value);}
-function validMeasure(m:Measure,columns:Column[]) {if(!m||!["sum","average","count","distinct","min","max","formula"].includes(m.aggregation)||m.format!==undefined&&!["number","percent","currency"].includes(m.format)||!columns.some(c=>c.id===m.field&&(c.type==="number"||["count","distinct"].includes(m.aggregation))))return false;return m.aggregation!=="formula"||typeof m.expression==="string"&&compileFormula(m.expression).fields.every(field=>columns.some(c=>c.id===field&&c.type==="number"));}
+function validMeasure(m:Measure,columns:Column[]) {if(!m||!["sum","average","count","distinct","min","max","formula","growth"].includes(m.aggregation)||m.format!==undefined&&!["number","percent","currency"].includes(m.format)||m.positiveOnly!==undefined&&!columns.some(c=>c.id===m.positiveOnly&&c.type==="number")||m.aggregation==="growth"&&!columns.some(c=>c.id==="year"&&c.type==="number")||!columns.some(c=>c.id===m.field&&(c.type==="number"||["count","distinct"].includes(m.aggregation))))return false;return m.aggregation!=="formula"||typeof m.expression==="string"&&compileFormula(m.expression).fields.every(field=>columns.some(c=>c.id===field&&c.type==="number"));}
