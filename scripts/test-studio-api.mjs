@@ -22,5 +22,11 @@ assert.equal((await call("/studio",undefined,customer)).status,200);
 for(const url of ["/internal","/studio/data","/","/connector/KnOrganisation"]){const r=await call(url,undefined,customer);assert.equal(r.status,307);assert.equal(new URL(r.headers.get("location"),base).pathname,"/studio");}
 for(const url of ["/api/knowledge?id=KnOrganisation","/api/receipt","/api/improve","/api/studio/session"]){assert.equal((await call(url,url.includes("?")?undefined:{},customer)).status,403);}
 assert.equal((await call("/api/studio/generate",request,customer)).status,200);
+// Exiting the customer demo requires the existing password login; no hidden
+// internal credential or automatic privilege escalation is retained.
+assert.equal((await call("/login?next=%2Fstudio",undefined,customer)).status,200);
+const restoredLogin=await call("/api/auth/login",{password:"local-studio-qa"},customer);assert.equal(restoredLogin.status,200);
+const restored=restoredLogin.headers.get("set-cookie").split(";")[0];
+assert.equal((await call("/api/knowledge?id=KnOrganisation",undefined,restored)).status,200);
 assert.equal((await fetch(`${base}/api/knowledge`)).status,401);
 console.log("Studio API: genereren, wijzigen, ontbrekende bronnen en server-side klant/interne scheiding geslaagd.");
