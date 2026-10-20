@@ -47,6 +47,13 @@ export function ToolboxLanding({ connectorCount }: { connectorCount: number }) {
       status: "Demo / POC", audiences: ["demo"],
     },
     {
+      title: "Data Studio",
+      description: "Bewerk brongegevens, maak formules en vergelijk planning, behoefte en resultaten in interactieve grafieken.",
+      detail: "PURE-demodata · eigen bestanden · relaties · berekende velden",
+      href: "/studio/data", action: "Open Data Studio", icon: "grid",
+      status: "Interne demo", audiences: ["internal", "demo"],
+    },
+    {
       title: "Dashboard Studio",
       description: "Van een vraag naar een bewerkbaar dashboard. Verken KPI’s, grafieken, filters en de controles erachter.",
       detail: "Fictieve cijfers · dashboards bewaard in deze browser",

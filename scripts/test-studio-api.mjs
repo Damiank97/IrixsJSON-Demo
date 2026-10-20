@@ -15,10 +15,11 @@ const missing=await(await call("/api/studio/generate",{...request,question:"Verz
 const disabled=await(await call("/api/studio/generate",{...request,available:["hours"]})).json();assert.ok(disabled.missing);
 assert.equal((await call("/api/studio/generate",{question:""})).status,400);
 assert.equal((await call("/api/knowledge?id=KnOrganisation")).status,200);
+assert.equal((await call("/studio/data")).status,200);
 const advice=await(await call("/api/knowledge",{question:"CRM naar AFAS synchroniseren"})).json();assert.ok(advice.evidence.some(e=>e.id==="KnOrganisation"));
 const scoped=await call("/api/studio/session",{});assert.equal(scoped.status,200);const customer=scoped.headers.get("set-cookie").split(";")[0];
 assert.equal((await call("/studio",undefined,customer)).status,200);
-for(const url of ["/internal","/","/connector/KnOrganisation"]){const r=await call(url,undefined,customer);assert.equal(r.status,307);assert.equal(new URL(r.headers.get("location"),base).pathname,"/studio");}
+for(const url of ["/internal","/studio/data","/","/connector/KnOrganisation"]){const r=await call(url,undefined,customer);assert.equal(r.status,307);assert.equal(new URL(r.headers.get("location"),base).pathname,"/studio");}
 for(const url of ["/api/knowledge?id=KnOrganisation","/api/receipt","/api/improve","/api/studio/session"]){assert.equal((await call(url,url.includes("?")?undefined:{},customer)).status,403);}
 assert.equal((await call("/api/studio/generate",request,customer)).status,200);
 assert.equal((await fetch(`${base}/api/knowledge`)).status,401);

@@ -2,7 +2,12 @@
 
 AFAS-hulpmiddelen voor intern gebruik en demonstraties. De home (`/`) licht het doel toe en biedt filters voor intern gebruik en demo’s. De keuze is navigatie, geen wijziging van toegangsrechten. Elke toolkaart benoemt of het om een hulpmiddel of een demo/POC gaat.
 
-Directe adressen: `/#planning`, `/#config`, `/#declarations`, `/#schemas`, `/studio` en `/internal`. Deze blijven na herladen werken.
+Directe adressen: `/#planning`, `/#config`, `/#declarations`, `/#schemas`, `/studio`, `/studio/data` en `/internal`. Deze blijven na herladen werken.
+
+- **Data Studio** (`/studio/data`) — bewerkbare brontabellen, veilige formules,
+  relaties en interactieve vergelijkingen; met PURE-behoefte, medewerkersplanning
+  en berekende openstaande uren. Lokale opslag, geen AFAS-terugschrijfkoppeling.
+  Zie [werking, demo en productiegrenzen](docs/data-studio.md).
 
 - **Dashboard Studio** (`/studio`) — dashboards genereren, handmatig/AI-bewerken,
   filteren en lokaal opslaan op fictieve omzet- en urendata.

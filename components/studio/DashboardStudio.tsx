@@ -111,6 +111,7 @@ export function DashboardStudio({ internal }: { internal: boolean }) {
       <button className={section === "library" ? "active" : ""} aria-current={section === "library" ? "page" : undefined} onClick={() => leave("library")}><Icon name="grid"/>Dashboards<span className="studio-count">{dashboards.filter((d)=>d.owner===profile||d.shared).length}</span></button>
       <button className={section === "generate" ? "active" : ""} aria-current={section === "generate" ? "page" : undefined} onClick={() => leave("generate")}><Icon name="spark"/>Maken met AI</button>
       <button className={section === "sources" ? "active" : ""} aria-current={section === "sources" ? "page" : undefined} onClick={() => leave("sources")}><Icon name="data"/>Mijn databronnen</button>
+      {internal&&<a className="studio-text-button" href="/studio/data" style={{padding:"12px",fontSize:12}}><Icon name="edit" size={17}/>Data & formules ↗</a>}
       <div className="studio-sidebar-note"><span className="studio-dot"/> Demonstratiedata<p>Ontdek de mogelijkheden met fictieve cijfers. Er is geen live AFAS-koppeling.</p></div>
       <div className="studio-sidebar-bottom">
         {internal && <a href="/internal"><Icon name="layers"/>Irixs intern ↗</a>}
