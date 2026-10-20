@@ -1,59 +1,103 @@
 # Declaratie-POC: afstand en geldigheidscombinaties
 
-## Invoerroute
+## Status en invoerroute
 
-Medewerker uit de ingelogde context → declaratiedatum → declaratiesoort → toegestaan project → rit/bon → concept opslaan → alle regels opnieuw controleren → indienen.
+Medewerker → declaratiedatum → toegestane declaratiesoort → toegestaan project → rit/bon → concept bewaren → alle regels opnieuw controleren → indienen.
 
-De POC gebruikt de vaste demomedewerker ALLARDJ en oktober 2026. Concepten staan uitsluitend in browseropslag. De knop Indienen simuleert statuswijziging; hij verstuurt geen AFAS-mutaties. Bij een werkelijke InSite-koppeling moet de server de medewerker uit de geverifieerde identiteit halen, actuele combinaties opnieuw lezen en elke regel controleren. Een browsercontrole is geen autorisatiegrens.
+Dit is een POC, geen productie-integratie met AFAS-mutaties. Concepten staan alleen in browseropslag, per demomedewerker gescheiden. De knop Indienen simuleert de statuswijziging en verstuurt geen AFAS-berichten. Oktober 2026 is de vaste demoperiode. De rechten in het demomodel zijn fictief.
 
-Conceptregels zijn te wijzigen, te annuleren en te verwijderen. De regelidentiteit blijft bij een wijziging behouden. Na demo-indiening zijn de regels vergrendeld. HrDeclarationInSite ondersteunt toevoegen; een bestaande, ingediende AFAS-declaratie aanpassen vereist een apart ingericht correctieproces. De POC verstuurt bij wijzigen geen tweede POST.
+Conceptregels kunnen worden gewijzigd, geannuleerd en verwijderd; wijzigen behoudt de regel-id. Opslaan van een onvolledig concept mag, toevoegen en indienen vereisen geldige regels. Na demo-indiening zijn regels vergrendeld. HrDeclarationInSite ondersteunt toevoegen; bestaande ingediende AFAS-declaraties wijzigen vereist een afzonderlijk correctieproces, niet een tweede POST.
 
-## Afstand: de officiële AFAS-bronnen
+Bij echte InSite-integratie moet de server de medewerker uit een geverifieerde identiteit bepalen, actuele rechten/combinaties ophalen en elke regel nogmaals controleren. Deze browserdemo is geen autorisatiegrens. Een volledige AFAS-verwerking vereist ook periode-, dienstverband-, boekings- en workflowcontroles die deze POC niet vervangt.
 
-- Google: **Routes API / Compute Routes**. Adressen worden server-side aangeboden; antwoord bevat afstand in meters. De POC vraagt de aanbevolen autoroute zonder actuele verkeersoptimalisatie op. Dat is geen gegarandeerde kortste route.
-- TomTom (in AFAS aangeduid als **TomTom API (ANWB)**): **Geocoding API** zet adressen om naar coördinaten, **Routing API** berekent de snelste of kortste autoroute. De POC gebruikt de gedocumenteerde TomTom Maps v1/v2-endpoints, passend bij de bestaande AFAS-integratie. TomTom heeft daarnaast nieuwere Orbis-producten; verwissel keys en contracten niet zonder migratie.
-- De ANWB-consumentenrouteplanner gebruikt TomTom voor autoroutes. De POC roept geen ongedocumenteerde ANWB-website-endpoints aan.
+## Afstand: wat is de standaard?
 
-Stel `GOOGLE_MAPS_API_KEY` en/of `TOMTOM_API_KEY` in op Vercel. Een ontbrekende sleutel schakelt de betreffende bron uit. Er wordt nooit stil teruggevallen op een verzonnen afstand. Alleen de expliciete demo-optie levert het fictieve voorbeeld Enter ↔ Utrecht (126 km).
+Er is geen aangetoonde universele AFAS-provider of decimaleninstelling. De werkgever kiest de provider, het communicatieprofiel de routevoorkeur en de gekoppelde kostensoort het aantal decimalen. Een niet-aangevinkte Snelste-optie betekent volgens de AFAS-Help kortste route. De demo start daarom met kortste; dit bewijst niet wat een specifieke klantomgeving heeft ingesteld.
 
-Bij retour berekent de POC heen en terug apart, omdat eenrichtingswegen afstanden kunnen veranderen. `KmCa` bevat de afstand heen, `KmRt` de retourvlag en `Qu` het totale te declareren aantal kilometers. Bij een geïmporteerde retour zonder afzonderlijke heenafstand wordt voor `KmCa` de helft van het aangeleverde totaal gebruikt; de totale hoeveelheid blijft ongewijzigd. Controleer deze gegevens bij de AFAS-testimport, met name wanneer AFAS zelf een routeberekening of afronding toepast.
+- **Google Routes API:** Compute Routes met alternatieven, DRIVE en TRAFFIC_UNAWARE. Uit alle teruggegeven kandidaten kiezen we de kleinste afstand of de laagste staticDuration. De snelste route is dus niet simpelweg de eerste route. Ontbreekt bruikbare metadata, dan blokkeren we de berekening.
+- **TomTom (ANWB):** Geocoding API voor adressen, Routing API voor routeType shortest/fastest, traffic=false. Geen ongedocumenteerd ANWB-website-endpoint.
+- **Retour:** enkele reis × 2, volgens de AFAS-declaratiehulp. Geen apart berekende B→A-route.
+- **Decimalen:** uit de soortlookup via Decimalen of AFAS_DECLARATION_DECIMALS_FIELD. Zonder instelling bewaart de demo drie decimalen voor meterprecisie; dat is nadrukkelijk geen universele AFAS-standaard. Het demotype ZK gebruikt expliciet drie decimalen.
+- **Afronding:** we bewaren de ruwe heenafstand en ronden de uiteindelijke declaratiehoeveelheid af op de kostensoortprecisie. De precieze afrondingsvolgorde van iedere AFAS-versie is niet aangetoond; controleer grensgevallen met een AFAS-referentie.
 
-De organisatie kiest de routebron en routevoorkeur overeenkomstig haar declaratiebeleid. De API berekent afstand en houdt geen GPS-rittenregistratie bij. Een eigen provideraccount, billing en toepasselijke gebruiksvoorwaarden horen bij het aansluiten van een echte bron. Keys blijven op de server. De adressen worden bij de gekozen provider verwerkt; de POC slaat geen routegeometrie of coördinaten op.
+### Grenzen van gelijkheid met AFAS
 
-## Geldigheidscombinaties
+De AFAS-Help spreekt over maximaal vijf Google-routes. Google documenteert maximaal drie alternatieven naast de standaardroute en biedt geen parameter om vijf af te dwingen. Wij gebruiken alle werkelijk ontvangen routes en tonen het aantal. We verzinnen geen extra routes om deze bronafwijking te verbergen.
 
-AFAS kan maximaal drie grondslagen combineren: onder andere project/projectgroep, item/integratiegroep, medewerker/functie en dimensies. Teamrechten en de declaratiesoort-kostensoortkoppeling kunnen aanvullend beperken wat is toegestaan. Een declaratiesoort is daarom niet automatisch dezelfde code als het item uit de geldigheidscombinatie.
+De actuele Google-consumentenplanner is geen goede referentie omdat die verkeersdrukte kan meenemen. Route-uitkomsten kunnen bovendien veranderen tussen aanvragen. De POC volgt de beschreven selectiemethode, maar exacte gelijkheid met AFAS is **niet live vastgesteld**.
 
-De lookup verwacht **uitgewerkte toegestane combinaties**, niet de ruwe `VaV1/BaV1`-velden van PtValComb. Los de toepasselijke grondslagen, groepen, teams en itemkoppeling eerst op in de AFAS-export/GetConnector of een omgevingsspecifieke integratielaag. Lever deze kolommen aan:
+Onder Uitkomst vergelijken met AFAS kan een referentietotaal worden ingevuld. Een afwijking blokkeert toevoegen/indienen; een match bevestigt alleen die ingevoerde referentie, niet alle toekomstige routes. Oude Google/TomTom-conceptregels zonder berekeningsversie 2 worden niet stil aangepast, maar vragen om opnieuw berekenen.
+
+Stel GOOGLE_MAPS_API_KEY en/of TOMTOM_API_KEY server-side in. Ontbrekende keys schakelen echte bronnen uit. Alleen de expliciete demo-optie levert fictieve kandidaten Enter ↔ Utrecht: kortste 126 km, snelste 138 km. Dit is geen echt route- of ANWB-resultaat.
+
+KmCa bevat de ruwe enkele afstand, KmRt de retourvlag en Qu het afgeronde totaal. Een geïmporteerd retourtotaal zonder heenafstand gebruikt voor KmCa de helft van het totaal. Controleer de interpretatie en eventuele verdere afronding met een AFAS-testimport.
+
+Een provideraccount, billing en gebruiksvoorwaarden horen bij echte aansluiting. Keys blijven op de server. Bij berekenen ontvangt de gekozen provider de adressen. Dit is routeberekening, geen GPS-rittenregistratie en geen import-API voor persoonlijke Google/ANWB-rittenhistorie.
+
+## Geldigheidscombinaties: gedocumenteerde regels
+
+AFAS ondersteunt maximaal drie verschillende, aansluitende grondslagen, zoals project/projectgroep, item/integratiegroep, medewerker/functie en dimensies.
+
+- Binnen één regel geldt EN; tussen actieve regels geldt OF.
+- Een bewust lege grondslagwaarde betekent alle waarden; een ontbrekende kolom is geen wildcard.
+- Begin- en einddatum zijn inclusief.
+- Bij niet-ingerichte combinaties geldt geen combinatiefilter. Bij een expliciet actieve, lege toegestane lijst is niets toegestaan.
+- Stamgegevens en projectteambeperkingen blijven aanvullend gelden.
+- Een declaratiesoort (BiId) moet naar de gekoppelde kostensoort worden vertaald. Bijvoorbeeld demotype ZK → item Kst:KM-ZAK → integratiegroep REIS. Die codes zijn niet automatisch gelijk.
+
+### Werkende demoprofielen
+
+De demo toont groepsregels (projectgroep + integratiegroep), individuele regels (medewerker + project + item), functieregels en niet-ingerichte combinaties. Er zijn drie fictieve medewerkers, projectteams, een geblokkeerd project/type en een OV-combinatie geldig van 1 t/m 15 oktober 2026.
+
+Scenario-knoppen tonen een geldige rit, geen teamlid, tijdelijk/verlopen OV en een geblokkeerd project. De uitleg laat de gekoppelde kostensoort, actieve grondslagen, teamcontrole en passende regel zien. Dropdowns tonen alleen soorten waarvoor minstens één volledige toegestane boeking bestaat. Een wildcard heft een teamblokkade niet op.
+
+Het downloadbare JSON-grondslagenmodel kan opnieuw worden geïmporteerd. Versie 1 ondersteunt zes grondslagtypen: employee, function, project, projectGroup, item en integrationGroup. Dimensies vallen buiten dit model. Het is ons interne uitwisselingscontract, geen kant-en-klaar AFAS-formaat. Teamdatums en declaratierechten zijn expliciete modelgegevens; een schema voor PtValComb levert deze informatie niet vanzelf.
+
+### Live GetConnector of uitgewerkte export
+
+De bestaande lookup accepteert uitgewerkte toegestane combinaties, niet ruwe VaV1/BaV1-velden. Los grondslagen, groepen, itemkoppelingen, actuele rechten en teams eerst op in de GetConnector of integratielaag. Gebruik geen wildcard als die een noodzakelijke medewerker- of teambeperking zou weglaten.
 
 | Kolom | Betekenis |
 | --- | --- |
-| Medewerker | Daadwerkelijke medewerkercode; leeg is bewust alle medewerkers |
-| Project | Daadwerkelijke projectcode; leeg is bewust alle projecten |
-| Declaratiesoort | Code voor HrDeclarationInSite.BiId; leeg is bewust alle soorten |
+| Medewerker | Daadwerkelijke medewerkercode; bewust leeg geldt voor alle |
+| Project | Daadwerkelijke projectcode; bewust leeg geldt voor alle |
+| Declaratiesoort | HrDeclarationInSite.BiId; bewust leeg geldt voor alle |
 | Begindatum | Inclusief, JJJJ-MM-DD; leeg is geen ondergrens |
 | Einddatum | Inclusief, JJJJ-MM-DD; leeg is geen bovengrens |
 
-Alle kolommen moeten aanwezig zijn, ook als een waarde bewust leeg is. Een ontbrekende kolom of ongeldige datum wordt geweigerd. Een lege lijst staat geen enkele combinatie toe. De POC ondersteunt import van JSON (`[]` of `{ "rows": [] }`), CSV en XLSX. Een upload vervangt de combinaties alleen voor de huidige sessie; opnieuw openen leest de geconfigureerde lookup.
+Alle vijf kolommen zijn verplicht. Ongeldige datums of een ontbrekende kolom worden geweigerd. De uitgewerkte lijst ondersteunt geen aparte niet-ingericht-vlag: een lege lijst weigert alles. Voor een expliciet uitgeschakeld combinatiefilter met overige controles is het volledige grondslagenmodel nodig.
 
-Voor live lookups: `AFAS_BASE_URL`, `AFAS_TOKEN`, `AFAS_PROJECTS_GETCONNECTOR`, `AFAS_DECLARATION_TYPES_GETCONNECTOR`, `AFAS_VALIDITY_GETCONNECTOR`. Veldnamen zijn instelbaar via de variabelen in `.env.example`. De soortlookup kan `Invoertype` bevatten met `kosten` of `kilometers`; dan bepaalt de declaratiesoort automatisch de invoer. Zonder die informatie kiest de gebruiker het invoertype expliciet. De server leest gepagineerd maximaal 50.000 regels per lookup. Gebruik een stabiele unieke sortering in de GetConnector. Een falende of onvolledig ingestelde live koppeling levert een fout en geen demotoestemmingen op.
+Import: JSON-lijst, GetConnector-resultaat met rows, CSV of XLSX. Een upload vervangt alleen de huidige sessie; herladen leest de geconfigureerde lookup. Volledige modelimport levert ook de stamgegevens voor de dropdowns.
 
-Zonder AFAS-configuratie gebruikt de POC uitsluitend herkenbare demogegevens. Deze demonstreren ook een beperkte OV-combinatie die alleen in oktober 2026 geldt.
+Live configuratie: AFAS_BASE_URL, AFAS_TOKEN, AFAS_PROJECTS_GETCONNECTOR, AFAS_DECLARATION_TYPES_GETCONNECTOR en AFAS_VALIDITY_GETCONNECTOR. Veldmapping staat in .env.example. Invoertype is kosten/kilometers; Decimalen komt uit de gekoppelde kostensoort. Als deze informatie ontbreekt, mag de gebruiker die niet als een vastgestelde AFAS-instelling beschouwen.
+
+De server leest gepagineerd maximaal 50.000 regels per lookup; gebruik een stabiele unieke sortering. Alleen volledig afwezige AFAS-configuratie geeft demogegevens. Een deels ingestelde of falende live koppeling blokkeert, zonder demotoestemmingen als fallback.
 
 ## Kilometerbestand importeren
 
-Verplicht: `Datum`, `Van`, `Naar`, `Kilometers`, `Typecode`, `Project`. Optioneel: `Retour` (ja/nee) en `Omschrijving`. Kilometers is altijd het totale te declareren aantal, ook bij retour. Gebruik maximaal twee decimalen zonder duizendtalscheiding. Datums: JJJJ-MM-DD, een Excel-datum of DD-MM-JJJJ. Per bestand maximaal 500 regels / 3 MB. Bij een fout wordt geen enkele regel uit het bestand toegevoegd. Wijzig een geïmporteerde regel om de afstand alsnog bij Google/TomTom te berekenen.
+Verplicht: Datum, Van, Naar, Kilometers, Typecode, Project. Optioneel: Retour (ja/nee) en Omschrijving. Kilometers is altijd het totaal, ook bij retour. Gebruik geen duizendtalscheiding; maximaal zes decimalen leesbaar, maar de kostensoort kan minder toestaan. De tool weigert te veel precisie en rondt importregels niet ongemerkt af.
 
-## Officiële bronnen
+Datums: JJJJ-MM-DD, Excel-datum of DD-MM-JJJJ. Maximaal 500 regels / 3 MB. Bij één fout wordt niets toegevoegd. Wijzigen van een importregel maakt opnieuw berekenen via Google/TomTom mogelijk.
 
-- [AFAS afstandsberekening](https://www.afas.help/vraagantwoord/NL/SE/137667.htm)
-- [AFAS Google Maps](https://www.afas.help/meldingen/NL/SE/137646.htm)
-- [AFAS TomTom (ANWB)](https://afas.help/vraagantwoord/nl/se/137510.htm)
-- [Google Compute Routes](https://developers.google.com/maps/documentation/routes/compute_route_directions)
-- [Google Route Matrix voor veel combinaties](https://developers.google.com/maps/documentation/routes/compute_route_matrix)
-- [TomTom Calculate Route](https://docs.tomtom.com/routing-api/documentation/tomtom-maps/v1/calculate-route)
-- [TomTom Geocode](https://docs.tomtom.com/geocoding-api/documentation/tomtom-maps/v1/geocode)
-- [ANWB routeplanner en TomTom](https://www.anwb.nl/verkeer/routeplanner/veelgestelde-vragen)
-- [AFAS geldigheidscombinaties](https://www.afas.help/help/NL/SE/Pro_Config_VldCmb.htm)
-- [AFAS declaraties en projectintegratie](https://afas.help/meldingen/nl/se/Hrm_Config_Declrs_2.htm)
-- [AFAS HrDeclarationInSite: toevoegen](https://help.afas.nl/help/NL/SE/App_Conect_UpdDsc_HrDecl_InSite.htm)
+## Verificatie
+
+Automatische tests gebruiken uitsluitend mocks en fictieve keys. Zij controleren routekeuze, verkeerinstelling, retour, precisie, ontbrekende metadata, combinaties, perioden, teamrechten, grondslagimport, lookups en foutafhandeling. Browsercontrole test dropdowns, scenario's, wijzigen en afzonderlijke democoncepten. Echte AFAS/provider-uitkomsten zijn niet vergeleken: daarvoor ontbreken de klantinstellingen en referentieritten.
+
+## Primaire bronnen
+
+- [AFAS: routekeuze en Google Routes API](https://help.afas.nl/help/NL/SE/136195.htm)
+- [AFAS: Google-inrichting](https://help.afas.nl/help/NL/SE/137646.htm)
+- [AFAS: TomTom (ANWB)](https://help.afas.nl/help/NL/SE/137510.htm)
+- [AFAS: declareren en retour verdubbelen](https://help.afas.nl/Help/nl/se/Hrm_Declrs.htm)
+- [AFAS: aantal decimalen bij kostensoort](https://help.afas.nl/help/NL/SE/121498.htm)
+- [Google: alternatieve routes](https://developers.google.com/maps/documentation/routes/alternative-routes)
+- [Google: Compute Routes REST-contract](https://developers.google.com/maps/documentation/routes/reference/rest/v2/TopLevel/computeRoutes)
+- [TomTom: Calculate Route](https://docs.tomtom.com/routing-api/documentation/tomtom-maps/v1/calculate-route)
+- [TomTom: Geocode](https://docs.tomtom.com/geocoding-api/documentation/tomtom-maps/v1/geocode)
+- [ANWB: routeplanner en TomTom](https://www.anwb.nl/verkeer/routeplanner/veelgestelde-vragen)
+- [AFAS: geldigheidscombinaties](https://help.afas.nl/help/NL/SE/Pro_Config_VldCmb.htm)
+- [AFAS: aanvullende teambeperking](https://help.afas.nl/Help/nl/se/Pro_Teams_Costng.htm)
+- [AFAS: filtering in matrixboeking](https://help.afas.nl/partner/nl/se/137155.htm)
+- [AFAS: declaraties en projectintegratie](https://help.afas.nl/help/NL/SE/Hrm_Config_Declrs_2.htm)
+- [AFAS: geldigheidsfout bij goedkeuren](https://help.afas.nl/meldingen/NL/SE/97197.htm)
+- [AFAS: HrDeclarationInSite](https://help.afas.nl/help/NL/SE/App_Conect_UpdDsc_HrDecl_InSite.htm)

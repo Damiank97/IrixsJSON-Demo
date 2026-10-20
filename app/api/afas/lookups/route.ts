@@ -1,21 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEMO_COMBINATIONS, parseCombinations } from "@/lib/declarationRules";
+import { parseCombinations } from "@/lib/declarationRules";
+import { demoValidityModel } from "@/lib/declarationValidity";
 
 type LookupKind = "projects" | "declarationTypes";
-type LookupOption = { code: string; label: string; kind?: "kosten" | "kilometers" };
-
-const DEMO_OPTIONS: Record<LookupKind, LookupOption[]> = {
-  projects: [
-    { code: "300000", label: "Intern project" },
-    { code: "PRJ-2026-01", label: "Implementatie" },
-    { code: "PRJ-2026-02", label: "Procesoptimalisatie" },
-  ],
-  declarationTypes: [
-    { code: "K01", label: "Overige kosten", kind: "kosten" },
-    { code: "ZK", label: "Zakelijke kilometers", kind: "kilometers" },
-    { code: "OV", label: "Overige declaratie", kind: "kosten" },
-  ],
-};
+type LookupOption = { code: string; label: string; kind?: "kosten" | "kilometers";decimals?:number };
 
 const FIELD_CANDIDATES: Record<LookupKind, { code: string[]; label: string[] }> = {
   projects: {
@@ -40,8 +28,11 @@ export async function GET(request: NextRequest) {
     ? process.env.AFAS_PROJECTS_GETCONNECTOR
     : kind === "declarationTypes" ? process.env.AFAS_DECLARATION_TYPES_GETCONNECTOR : process.env.AFAS_VALIDITY_GETCONNECTOR;
 
-  if (!baseUrl && !token && !connector) {
-    return NextResponse.json(kind === "validityCombinations" ? { source: "demo", combinations: DEMO_COMBINATIONS } : { source: "demo", options: filter(DEMO_OPTIONS[kind], query) }, { headers: { "Cache-Control": "no-store" } });
+  const anyAfasConfiguration=Boolean(baseUrl||token||process.env.AFAS_PROJECTS_GETCONNECTOR||process.env.AFAS_DECLARATION_TYPES_GETCONNECTOR||process.env.AFAS_VALIDITY_GETCONNECTOR);
+  if (!anyAfasConfiguration) {
+    const model=demoValidityModel();
+    const options=kind==="projects"?model.projects.map(p=>({code:p.code,label:p.label})):model.declarationTypes.map(t=>({code:t.code,label:t.label,kind:t.kind,decimals:t.decimals}));
+    return NextResponse.json(kind === "validityCombinations" ? { source:"demo",model,combinations:[] } : { source:"demo",options:filter(options,query) }, { headers: { "Cache-Control": "no-store" } });
   }
   if (!baseUrl || !token || !connector) return NextResponse.json({ source: "error", error: "AFAS-koppeling is onvolledig ingesteld. Vul de omgevingsvariabelen en de GetConnector voor deze lookup in." }, { status: 503 });
 
@@ -89,7 +80,10 @@ function toOption(row: Record<string, unknown>, kind: LookupKind): LookupOption 
     const column = process.env.AFAS_DECLARATION_KIND_FIELD || "Invoertype";
     const value = String(row[column] ?? "").trim().toLowerCase();
     if (process.env.AFAS_DECLARATION_KIND_FIELD && !["kosten", "kilometers"].includes(value)) throw new Error(`Kolom '${column}' moet kosten of kilometers bevatten voor elke declaratiesoort.`);
-    return { code, label, ...(["kosten", "kilometers"].includes(value) ? { kind: value as "kosten" | "kilometers" } : {}) };
+    const decimalsField=process.env.AFAS_DECLARATION_DECIMALS_FIELD||"Decimalen",rawDecimals=row[decimalsField];
+    const decimals=rawDecimals===undefined||rawDecimals===null||rawDecimals===""?undefined:Number(rawDecimals);
+    if(decimals!==undefined&&(!Number.isInteger(decimals)||decimals<0||decimals>6))throw new Error(`Kolom '${decimalsField}' moet een geheel aantal decimalen van 0 t/m 6 bevatten.`);
+    return { code, label, ...(["kosten", "kilometers"].includes(value) ? { kind: value as "kosten" | "kilometers" } : {}),...(decimals!==undefined?{decimals}:{}) };
   }
   return { code, label };
 }

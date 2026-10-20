@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { MileageEditor, type MileageValues } from "@/components/MileageEditor";
 import { matchesCombination, parseCombinations, validDate, type ValidityCombination } from "@/lib/declarationRules";
+import { allowedDeclarationTypes, allowedProjects as modelProjects, checkValidity, demoValidityModel, parseValidityModel, type DemoProfile, type ValidityModel } from "@/lib/declarationValidity";
+import { ValidityInspector, type DemoPreset } from "@/components/ValidityInspector";
+import { MILEAGE_VERSION, mileageConsistent } from "@/lib/mileageRules";
 
 type LineKind = "kilometers" | "kosten";
 
@@ -33,7 +36,7 @@ type Batch = {
 };
 
 type Preview = "flow" | "storage" | "posts";
-type LookupOption = { code: string; label: string; kind?: LineKind };
+type LookupOption = { code: string; label: string; kind?: LineKind; decimals?: number };
 type ReceiptResult = { description: string; amount: number | null; date: string | null; merchant: string | null; confidence: "laag" | "middel" | "hoog" };
 
 const STORAGE_KEY = "irixs-declaration-poc-v1";
@@ -59,6 +62,10 @@ const INITIAL_BATCH: Batch = {
       from: "Enter",
       to: "Utrecht",
       kilometers: 126,
+      outboundKilometers: 126,
+      distanceSource: "demo",
+      kilometerDecimals: 3,
+      calculationVersion: MILEAGE_VERSION,
       receipt: "",
     },
     {
@@ -122,11 +129,16 @@ export function DeclarationBatchPoc() {
   const [validityError, setValidityError] = useState("");
   const [importing, setImporting] = useState(false);
   const [distanceReading, setDistanceReading] = useState(false);
+  const [validityModel, setValidityModel] = useState<ValidityModel | null>(null);
+  const [demoProfile, setDemoProfile] = useState<DemoProfile>("groups");
 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setBatch(JSON.parse(stored) as Batch);
+      if (stored) {
+        const saved = JSON.parse(stored) as Batch;
+        if (saved.employeeId === INITIAL_BATCH.employeeId && Array.isArray(saved.lines)) setBatch(saved);
+      }
     } catch {
       // Een beschadigde demo-opslag mag de pagina niet blokkeren.
     } finally {
@@ -151,7 +163,9 @@ export function DeclarationBatchPoc() {
     fetch("/api/afas/lookups?type=validityCombinations").then((response) => response.json()).then((data) => {
       if (!active) return;
       if (data.error) throw new Error(data.error);
-      setCombinations(data.combinations ?? []); setValiditySource(data.source);
+      setCombinations(data.combinations ?? []);
+      setValidityModel(data.model ? parseValidityModel(data.model) : null);
+      setValiditySource(data.source);
     }).catch((error) => { if (active) { setValiditySource("error"); setValidityError(error instanceof Error ? error.message : "Geldigheidscombinaties laden mislukt."); } });
     return () => { active = false; };
   }, []);
@@ -167,9 +181,12 @@ export function DeclarationBatchPoc() {
   const storagePayload = useMemo(() => buildFreeFilePayload(batch), [batch]);
   const postPayloads = useMemo(() => batch.lines.map((line) => buildDeclarationPayload(batch, line)), [batch]);
   const rulesReady = !lookupError && !validityError && validitySource !== "laden" && lookupSource !== "laden";
-  const allowedTypes = declarationTypes.filter((option) => combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, option.code)));
-  const allowedProjects = projects.filter((option) => combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, draft.declarationType, option.code)));
-  const draftValid = rulesReady && combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, draft.declarationType, draft.project));
+  const typeOptions = validityModel?.declarationTypes ?? declarationTypes;
+  const projectOptions = validityModel?.projects ?? projects;
+  const allowedTypes = validityModel ? allowedDeclarationTypes(validityModel, batch.employeeId, draft.date) : typeOptions.filter((option) => combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, option.code)));
+  const allowedProjects = validityModel ? modelProjects(validityModel, batch.employeeId, draft.date, draft.declarationType) : projectOptions.filter((option) => combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, draft.declarationType, option.code)));
+  const draftCheck = validityModel ? checkValidity(validityModel, { employee: batch.employeeId, date: draft.date, declarationType: draft.declarationType, project: draft.project }) : null;
+  const draftValid = rulesReady && (draftCheck ? draftCheck.allowed : combinations.some((rule) => matchesCombination(rule, batch.employeeId, draft.date, draft.declarationType, draft.project)));
   const invalidLines = batch.lines.filter((line) => Boolean(lineError(line)));
 
   function lineError(line: Omit<DeclarationLine, "id">): string {
@@ -177,20 +194,25 @@ export function DeclarationBatchPoc() {
     if (!validDate(line.date)) return "Kies een geldige datum.";
     if (line.date.slice(0, 7) !== batch.period) return "De datum moet binnen de maand van het concept vallen.";
     if (!line.description.trim() || line.description.length > 255) return "Vul een omschrijving in van maximaal 255 tekens.";
-    if (!declarationTypes.some((option) => option.code === line.declarationType)) return "Kies een bestaande declaratiesoort.";
-    const typeKind = declarationTypes.find((option) => option.code === line.declarationType)?.kind;
+    if (!typeOptions.some((option) => option.code === line.declarationType)) return "Kies een bestaande declaratiesoort.";
+    const selectedType = typeOptions.find((option) => option.code === line.declarationType);
+    const typeKind = selectedType?.kind;
     if (typeKind && typeKind !== line.kind) return "Het invoertype past niet bij deze declaratiesoort.";
-    if (line.project && !projects.some((option) => option.code === line.project)) return "Kies een bestaand project.";
-    if (!combinations.some((rule) => matchesCombination(rule, batch.employeeId, line.date, line.declarationType, line.project))) return "Geen geldige combinatie voor deze medewerker, datum, declaratiesoort en project.";
+    if (line.project && !projectOptions.some((option) => option.code === line.project)) return "Kies een bestaand project.";
+    if (validityModel) {
+      const check = checkValidity(validityModel, { employee: batch.employeeId, date: line.date, declarationType: line.declarationType, project: line.project });
+      if (!check.allowed) return check.reason;
+    } else if (!combinations.some((rule) => matchesCombination(rule, batch.employeeId, line.date, line.declarationType, line.project))) return "Geen geldige combinatie voor deze medewerker, datum, declaratiesoort en project.";
     const value = line.kind === "kilometers" ? line.kilometers : line.amount;
     if (!Number.isFinite(value) || value <= 0) return "Vul een positief bedrag of aantal kilometers in.";
     if (line.kind === "kilometers" && (!line.from.trim() || !line.to.trim() || line.from.length > 255 || line.to.length > 255)) return "Vul twee adressen in (maximaal 255 tekens).";
+    if (line.kind === "kilometers") return mileageConsistent(line, selectedType?.decimals);
     return "";
   }
 
   function persist(next: Batch) {
     setBatch(next);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    window.localStorage.setItem(employeeStorageKey(next.employeeId), JSON.stringify(next));
   }
 
   function saveConcept() {
@@ -202,7 +224,7 @@ export function DeclarationBatchPoc() {
       submittedAt: "",
     };
     persist(next);
-    setNotice("Concept opgeslagen. In productie worden deze regels in het vrije bestand van AFAS bewaard.");
+    setNotice("Concept in deze browser opgeslagen, ook als regels nog controle vragen. De beoogde productie-integratie bewaart dit in een vrij bestand van AFAS.");
   }
 
   function submitBatch() {
@@ -239,12 +261,48 @@ export function DeclarationBatchPoc() {
 
   function cancelEdit() { setEditingId(null); setDraft(EMPTY_LINE); setReceiptResult(null); setReceiptError(""); setNotice("Wijziging geannuleerd. De opgeslagen regel is behouden."); }
 
+  function switchEmployee(employeeId: string) {
+    if (editingId || validitySource !== "demo" || lookupSource !== "demo" || !validityModel) return;
+    const employee = validityModel.employees.find((entry) => entry.code === employeeId);
+    if (!employee) return;
+    window.localStorage.setItem(employeeStorageKey(batch.employeeId), JSON.stringify(batch));
+    let next: Batch = { ...INITIAL_BATCH, batchId: `DECL-2026-10-${employeeId}`, employeeId, employeeName: employee.label, lines: employeeId === INITIAL_BATCH.employeeId ? INITIAL_BATCH.lines : [], savedAt: "", submittedAt: "", submitted: false };
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(employeeStorageKey(employeeId)) || "null") as Batch | null;
+      if (stored?.employeeId === employeeId && Array.isArray(stored.lines)) next = stored;
+    } catch { /* Never reassign another employee's lines when demo storage is unreadable. */ }
+    setBatch(next); setDraft({ ...EMPTY_LINE, declarationType: "", project: "" }); setReceiptResult(null); setReceiptError("");
+    setNotice(`Afzonderlijk democoncept voor ${employeeId} geopend. Regels van de andere medewerker zijn ongewijzigd bewaard.`);
+  }
+
+  function changeProfile(profile: DemoProfile) {
+    setDemoProfile(profile); setValidityModel(demoValidityModel(profile));
+    setDraft((current) => ({ ...current, declarationType: "", project: "" }));
+    setNotice("Demo-inrichting gewijzigd. Alle bestaande conceptregels worden opnieuw gecontroleerd; er wordt niets naar AFAS geschreven.");
+  }
+
+  function applyPreset(preset: DemoPreset) {
+    if (editingId || batch.submitted) return;
+    setDraft({ ...EMPTY_LINE, date: preset === "temporary" ? "2026-10-10" : "2026-10-20", declarationType: preset === "temporary" || preset === "expired" ? "OV" : "ZK", kind: preset === "temporary" || preset === "expired" ? "kosten" : "kilometers", project: preset === "team" ? "PRJ-2026-02" : preset === "blocked" ? "PRJ-GEBLOKKEERD" : "PRJ-2026-01", description: "Democontrole geldigheidscombinatie", amount: 12.5, from: "Enter", to: "Utrecht" });
+    setNotice("Demoselectie ingevuld. Bekijk hieronder welke controles slagen en welke keuze wordt tegengehouden.");
+  }
+
   async function importValidity(file: File) {
     setImporting(true);
     try {
+      if (file.size > 3_000_000) throw new Error("Kies een importbestand kleiner dan 3 MB.");
+      if (file.name.toLowerCase().endsWith(".json")) {
+        const raw = JSON.parse(await file.text());
+        if (raw && typeof raw === "object" && "bases" in raw) {
+          const imported = parseValidityModel(raw);
+          setValidityModel(imported); setCombinations([]); setValiditySource("bestand"); setValidityError("");
+          setNotice("Grondslagenmodel geladen, inclusief kostensoortkoppelingen, teams en datumgrenzen. Alle conceptregels worden opnieuw gecontroleerd.");
+          return;
+        }
+      }
       const rows = await readImportRows(file);
       const imported = parseCombinations(rows);
-      setCombinations(imported); setValiditySource("bestand"); setValidityError("");
+      setValidityModel(null); setCombinations(imported); setValiditySource("bestand"); setValidityError("");
       setNotice(`${imported.length} uitgewerkte geldigheidscombinaties geladen. Alle conceptregels worden opnieuw gecontroleerd.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Bestand kon niet worden gelezen."); }
     finally { setImporting(false); }
@@ -317,8 +375,7 @@ export function DeclarationBatchPoc() {
   }
 
   function resetDemo() {
-    window.localStorage.removeItem(STORAGE_KEY);
-    setBatch(INITIAL_BATCH);
+    persist({ ...INITIAL_BATCH, batchId: `DECL-2026-10-${batch.employeeId}`, employeeId: batch.employeeId, employeeName: batch.employeeName, lines: batch.employeeId === INITIAL_BATCH.employeeId ? INITIAL_BATCH.lines : [] });
     setDraft(EMPTY_LINE);
     setEditingId(null);
     setNotice("De demo is hersteld.");
@@ -355,14 +412,15 @@ export function DeclarationBatchPoc() {
         <h2 className="mt-2 text-xl font-semibold">Medewerker + datum → declaratiesoort → project → rit of bon</h2>
         <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted">Voor {batch.employeeId} bepaalt de declaratiedatum welke soorten en projecten zijn toegestaan. Wijzigen van de datum of soort vraagt om een nieuwe projectkeuze. Bij opslaan en indienen wordt iedere regel opnieuw gecontroleerd.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-          <span className="rounded-full bg-accent-soft px-3 py-2 font-semibold">Geldigheidscombinaties: {validitySource === "laden" ? "laden…" : validitySource === "demo" ? "demogegevens" : validitySource === "bestand" ? "importbestand" : validitySource === "error" ? "niet beschikbaar" : "AFAS"} · {combinations.length}</span>
+          <span className="rounded-full bg-accent-soft px-3 py-2 font-semibold">Geldigheidscombinaties: {validitySource === "laden" ? "laden…" : validitySource === "demo" ? "demogegevens" : validitySource === "bestand" ? "importbestand" : validitySource === "error" ? "niet beschikbaar" : "AFAS"} · {validityModel?.rules.length ?? combinations.length}</span>
           <label className="tool-button-secondary cursor-pointer !px-4 !py-2">Combinaties importeren<input type="file" accept=".json,.csv,.xlsx" className="sr-only" disabled={importing || batch.submitted || receiptReading || distanceReading} onChange={(e) => { const file = e.target.files?.[0]; if (file) void importValidity(file); e.target.value = ""; }} /></label>
         </div>
-        {(lookupError || validityError) && <p role="alert" className="mt-3 text-sm text-danger">{lookupError || validityError} Opslaan en indienen zijn geblokkeerd totdat dit is hersteld.</p>}
+        {(lookupError || validityError) && <p role="alert" className="mt-3 text-sm text-danger">{lookupError || validityError} Toevoegen en indienen zijn geblokkeerd totdat dit is hersteld. Concepten blijven bewaard.</p>}
+        {validityModel && draftCheck && <ValidityInspector model={validityModel} result={draftCheck} demo={validitySource === "demo" && lookupSource === "demo"} employee={batch.employeeId} profile={demoProfile} disabled={Boolean(editingId) || importing || receiptReading || distanceReading || batch.submitted} onEmployee={switchEmployee} onProfile={changeProfile} onPreset={applyPreset} />}
         <details className="mt-4 text-xs text-muted"><summary className="cursor-pointer font-semibold text-accent">Welke combinaties moeten worden aangeleverd?</summary>
           <p className="mt-3 leading-relaxed">Gebruik uitgewerkte toegestane combinaties met kolommen <code>Medewerker, Project, Declaratiesoort, Begindatum, Einddatum</code>. Datums: JJJJ-MM-DD. Een bewust lege waarde geldt voor alle waarden; een ontbrekende kolom wordt afgekeurd. Begin- en einddatum tellen mee.</p>
           <p className="mt-2 leading-relaxed">AFAS kan ook projectgroepen, integratiegroepen, functies, dimensies en teams gebruiken. Deze moeten in de GetConnector/export eerst naar de daadwerkelijke medewerker/project/declaratiesoort zijn vertaald, inclusief de koppeling van declaratiesoort naar kostensoort. De POC leest geen ruwe VaV1/BaV1-regels als een kant-en-klare autorisatie.</p>
-          <p className="mt-2 leading-relaxed">De combinaties zijn een invoercontrole. Medewerkeridentiteit en autorisatie moeten bij een echte InSite-koppeling ook op de server worden gecontroleerd.</p>
+          <p className="mt-2 leading-relaxed">De demo leest ook het downloadbare grondslagenmodel (JSON), inclusief kostensoortkoppelingen, teams en datumgrenzen. Dimensies vallen buiten dit model en moeten worden uitgewerkt. De controles gebruiken een exportmoment; AFAS blijft leidend voor actuele rechten en geldigheid. Medewerkeridentiteit en autorisatie moeten bij een echte InSite-koppeling op de server worden gecontroleerd.</p>
         </details>
       </section>
 
@@ -414,13 +472,13 @@ export function DeclarationBatchPoc() {
             <p className="mt-2 text-xs text-muted">Importkolommen: Datum, Van, Naar, Kilometers (totaal), Typecode, Project. Optioneel: Retour en Omschrijving. Alle regels worden vóór toevoegen gecontroleerd. <a className="font-semibold underline" href="/downloads/Kilometerregels-voorbeeld.csv" download>Voorbeeldbestand</a></p>
             <fieldset disabled={distanceReading || receiptReading || importing} className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Field label="01 · Datum"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value, declarationType: "", project: "" })} /></Field>
-              <Field label={`02 · Declaratiesoort · ${lookupSource === "afas" ? "AFAS" : "demo"}`}><select value={draft.declarationType} disabled={!rulesReady} onChange={(e) => setDraft({ ...draft, declarationType: e.target.value, project: "", kind: declarationTypes.find((option) => option.code === e.target.value)?.kind ?? draft.kind })}><option value="">Kies declaratiesoort</option>{draft.declarationType && !allowedTypes.some((option) => option.code === draft.declarationType) && <option value={draft.declarationType} disabled>{draft.declarationType} · niet toegestaan</option>}{allowedTypes.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
-              <Field label={`03 · Project · ${lookupSource === "afas" ? "AFAS" : "demo"}`}><select value={draft.project} disabled={!rulesReady || !draft.declarationType} onChange={(e) => setDraft({ ...draft, project: e.target.value })}><option value="">Kies project / geen project</option>{draft.project && !allowedProjects.some((option) => option.code === draft.project) && <option value={draft.project} disabled>{draft.project} · niet toegestaan</option>}{allowedProjects.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
-              <Field label={`Invoer · ${declarationTypes.find((option) => option.code === draft.declarationType)?.kind ? "uit declaratiesoort" : "handmatig kiezen"}`}><select value={draft.kind} disabled={Boolean(declarationTypes.find((option) => option.code === draft.declarationType)?.kind)} onChange={(e) => setDraft({ ...draft, kind: e.target.value as LineKind })}><option value="kosten">Kosten</option><option value="kilometers">Kilometers</option></select></Field>
-              <p role="status" className={`md:col-span-2 lg:col-span-4 text-xs ${draftValid ? "text-success" : "text-danger"}`}>{draftValid ? `Geldige combinatie · ${validitySource === "demo" ? "democontrole" : validitySource === "bestand" ? "controle op importbestand" : "controle op AFAS-export"}` : "Kies een toegestane combinatie voor de datum en medewerker."}</p>
+              <Field label={`02 · Declaratiesoort · ${validitySource === "bestand" && validityModel ? "modelbestand" : lookupSource === "afas" ? "AFAS" : "demo"}`}><select value={draft.declarationType} disabled={!rulesReady} onChange={(e) => setDraft({ ...draft, declarationType: e.target.value, project: "", kind: typeOptions.find((option) => option.code === e.target.value)?.kind ?? draft.kind })}><option value="">Kies declaratiesoort</option>{draft.declarationType && !allowedTypes.some((option) => option.code === draft.declarationType) && <option value={draft.declarationType} disabled>{draft.declarationType} · niet toegestaan</option>}{allowedTypes.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
+              <Field label={`03 · Project · ${validitySource === "bestand" && validityModel ? "modelbestand" : lookupSource === "afas" ? "AFAS" : "demo"}`}><select value={draft.project} disabled={!rulesReady || !draft.declarationType} onChange={(e) => setDraft({ ...draft, project: e.target.value })}><option value="">Kies project / geen project</option>{draft.project && !allowedProjects.some((option) => option.code === draft.project) && <option value={draft.project} disabled>{draft.project} · niet toegestaan</option>}{allowedProjects.map((option) => <option key={option.code} value={option.code}>{option.code} · {option.label}</option>)}</select></Field>
+              <Field label={`Invoer · ${typeOptions.find((option) => option.code === draft.declarationType)?.kind ? "uit declaratiesoort" : "handmatig kiezen"}`}><select value={draft.kind} disabled={Boolean(typeOptions.find((option) => option.code === draft.declarationType)?.kind)} onChange={(e) => setDraft({ ...draft, kind: e.target.value as LineKind })}><option value="kosten">Kosten</option><option value="kilometers">Kilometers</option></select></Field>
+              <p role="status" className={`md:col-span-2 lg:col-span-4 text-xs ${draftValid ? "text-success" : "text-danger"}`}>{draftValid ? `Geldige combinatie · ${validitySource === "demo" ? "democontrole" : validitySource === "bestand" ? "controle op importbestand" : "controle op AFAS-export"}` : draftCheck?.reason ?? "Kies een toegestane combinatie voor de datum en medewerker."}</p>
               <div className="md:col-span-2"><Field label="04 · Omschrijving"><input maxLength={255} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Bijv. parkeerkosten" /></Field></div>
               {draft.kind === "kilometers" ? (
-                <MileageEditor key={editingId ?? "new"} value={draft} onBusyChange={setDistanceReading} onChange={(changes) => setDraft((current) => ({ ...current, ...changes }))} />
+                <MileageEditor key={editingId ?? "new"} value={draft} decimals={typeOptions.find((option) => option.code === draft.declarationType)?.decimals} onBusyChange={setDistanceReading} onChange={(changes) => setDraft((current) => ({ ...current, ...changes }))} />
               ) : (
                 <>
                   <Field label="Bedrag"><input type="number" min="0" step="0.01" value={draft.amount || ""} onChange={(e) => setDraft({ ...draft, amount: Number(e.target.value) })} /></Field>
@@ -548,6 +606,10 @@ function buildFreeFilePayload(batch: Batch) {
       Afstandsbron: line.distanceSource || "handmatig",
       AfstandBerekendOp: line.distanceCalculatedAt || null,
       Routekeuze: line.routePreference || null,
+      KilometerDecimalen: line.kilometerDecimals ?? null,
+      Berekeningsversie: line.calculationVersion ?? null,
+      AantalRoutekandidaten: line.candidateCount ?? null,
+      AFASReferentieKilometers: line.afasReferenceKilometers ?? null,
       Bijlage: line.receipt || null,
     })),
   };
@@ -579,6 +641,7 @@ function formatEuro(value: number) {
 }
 
 function formatDate(value: string) {
+  if (!validDate(value)) return value || "Datum ontbreekt";
   return new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${value}T12:00:00`));
 }
 
@@ -621,6 +684,10 @@ function importNumber(value: unknown): number {
   if (typeof value === "number") return value;
   const text = String(value ?? "").trim();
   // Punt of komma als decimaal; een dubbelzinnige duizendtalsnotatie afkeuren.
-  if (!/^\d+(?:[.,]\d{1,2})?$/.test(text)) throw new Error("Kilometers moet een getal zijn met maximaal twee decimalen, zonder duizendtalscheiding.");
+  if (!/^\d+(?:[.,]\d{1,6})?$/.test(text)) throw new Error("Kilometers moet een getal zijn met maximaal zes decimalen, zonder duizendtalscheiding. De kostensoort bepaalt de toegestane precisie.");
   return Number(text.replace(",", "."));
+}
+
+function employeeStorageKey(employee: string) {
+  return employee === INITIAL_BATCH.employeeId ? STORAGE_KEY : `${STORAGE_KEY}:${employee}`;
 }
